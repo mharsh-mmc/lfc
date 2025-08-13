@@ -142,7 +142,17 @@
 
       <!-- Vue Flow Canvas -->
       <div class="bg-white border border-gray-200 p-4">
+        <!-- Loading State -->
+        <div v-if="isLoading" class="flex items-center justify-center h-96">
+          <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-600">Loading family tree...</p>
+          </div>
+        </div>
+        
+        <!-- VueFlow Container -->
         <div 
+          v-else
           class="relative" 
           style="height: 600px;"
           ref="vueFlowContainer"
@@ -301,6 +311,8 @@ const showProfilePopup = ref(false);
 const selectedProfile = ref(null);
 const isGeneratingLayout = ref(false);
 const isSaving = ref(false);
+const isLoading = ref(true);
+const hasLoadedTree = ref(false);
 
 // Advanced features state
 const currentLayout = ref('custom');
@@ -328,6 +340,60 @@ const toggleMode = () => {
   isBuilderMode.value = !isBuilderMode.value;
 };
 
+// Load existing tree data
+const loadTreeData = async () => {
+  if (hasLoadedTree.value) return;
+  
+  try {
+    isLoading.value = true;
+    const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree`, {
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      }
+    });
+    
+    if (response.ok) {
+      const treeData = await response.json();
+      console.log('Loaded tree data:', treeData);
+      
+      // Convert backend data to VueFlow format
+      const vueFlowNodes = treeData.nodes.map(node => ({
+        id: node.id.toString(),
+        type: 'familyNode',
+        position: { x: node.x_position, y: node.y_position },
+        data: {
+          id: node.id,
+          name: node.profile?.name || 'Unknown',
+          username: node.profile?.username || 'No username',
+          profile_photo_url: node.profile?.profile_photo_path ? `/storage/${node.profile.profile_photo_path}` : null,
+          relation: node.relation,
+          showDetails: !performanceMode.value,
+          // Add additional profile data
+          date_of_birth: node.profile?.date_of_birth,
+          location: node.profile?.location,
+          bio: node.profile?.bio,
+          profession: node.profile?.profession,
+          passion: node.profile?.passion,
+          mission: node.profile?.mission,
+          calling: node.profile?.calling
+        }
+      }));
+      
+      const vueFlowEdges = treeData.edges || [];
+      
+      // Combine nodes and edges
+      elements.value = [...vueFlowNodes, ...vueFlowEdges];
+      hasLoadedTree.value = true;
+      
+      console.log('VueFlow elements set:', elements.value);
+    }
+  } catch (error) {
+    console.error('Failed to load tree data:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
 const togglePerformanceMode = () => {
   performanceMode.value = !performanceMode.value;
   // Update node details visibility based on performance mode
@@ -350,20 +416,38 @@ const toggleHelperLines = () => {
 };
 
 const addPersonToTree = async (person) => {
+  console.log('Adding person to tree:', person);
+  
+  // Handle both person objects and treeNode objects from the modal
+  const personData = person.node ? person.node : person;
+  const profileData = personData.profile ? personData.profile : personData;
+  
   const newNode = {
-    id: person.id.toString(),
+    id: profileData.id.toString(),
     type: 'familyNode',
-    position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 },
+    position: { 
+      x: personData.x_position || personData.x || Math.random() * 200 - 100, 
+      y: personData.y_position || personData.y || Math.random() * 200 - 100 
+    },
     data: {
-      id: person.id,
-      name: person.name,
-      username: person.username,
-      profile_photo_url: person.profile_photo_url,
-      relation: person.relation || 'family',
-      showDetails: !performanceMode.value
+      id: profileData.id,
+      name: profileData.name,
+      username: profileData.username,
+      profile_photo_url: profileData.profile_photo_url || profileData.profile_photo_path ? `/storage/${profileData.profile_photo_path}` : null,
+      relation: personData.relation || 'family',
+      showDetails: !performanceMode.value,
+      // Add additional profile data
+      date_of_birth: profileData.date_of_birth,
+      location: profileData.location,
+      bio: profileData.bio,
+      profession: profileData.profession,
+      passion: profileData.passion,
+      mission: profileData.mission,
+      calling: profileData.calling
     }
   };
   
+  console.log('Created new node:', newNode);
   elements.value = [...elements.value, newNode];
   emit('tree-updated');
 };
@@ -785,25 +869,39 @@ const handleKeyDown = (event) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   console.log('FamilyTree mounted with props:', props);
   
   // Set initial builder mode
   isBuilderMode.value = props.isEditable;
   
-  // Create center node
+  // Create center node with improved positioning
   if (props.profileUserData && props.profileUserData.id) {
+    // Calculate center position based on container size
+    const containerWidth = 800; // Approximate container width
+    const containerHeight = 600; // Approximate container height
+    const centerX = containerWidth / 2;
+    const centerY = containerHeight / 2;
+    
     const centerNode = {
       id: props.profileUserData.id.toString(),
       type: 'familyNode',
-      position: { x: 0, y: 0 },
+      position: { x: centerX, y: centerY },
       data: {
         id: props.profileUserData.id,
         name: props.profileUserData.name,
         username: props.profileUserData.username,
         profile_photo_url: props.profileUserData.profile_photo_url,
         relation: 'self',
-        showDetails: !performanceMode.value
+        showDetails: !performanceMode.value,
+        // Add additional profile data
+        date_of_birth: props.profileUserData.date_of_birth,
+        location: props.profileUserData.location,
+        bio: props.profileUserData.bio,
+        profession: props.profileUserData.profession,
+        passion: props.profileUserData.passion,
+        mission: props.profileUserData.mission,
+        calling: props.profileUserData.calling
       }
     };
     
@@ -813,6 +911,9 @@ onMounted(() => {
   } else {
     console.error('No profile user data available:', props.profileUserData);
   }
+  
+  // Load existing tree data
+  await loadTreeData();
   
   // Add keyboard event listener
   document.addEventListener('keydown', handleKeyDown);

@@ -355,17 +355,15 @@ const handleSubmit = async () => {
       const newProfile = await response.json();
       console.log('Profile created successfully:', newProfile);
       
-      // Add to tree with random position
+      // Add to tree with proper data structure
       const treeNode = {
-        id: newProfile.node.id,
-        name: newProfile.node.profile.name,
-        username: newProfile.node.profile.username,
-        profile_photo_url: newProfile.node.profile.profile_photo_path ? `/storage/${newProfile.node.profile.profile_photo_path}` : null,
+        node: newProfile.node,
         relation: newProfile.node.relation,
-        x: Math.random() * 400 - 200,
-        y: Math.random() * 400 - 200
+        x_position: Math.random() * 400 - 200,
+        y_position: Math.random() * 400 - 200
       };
       
+      console.log('Emitting treeNode:', treeNode);
       emit('add-person', treeNode);
       emit('close');
     } else {
