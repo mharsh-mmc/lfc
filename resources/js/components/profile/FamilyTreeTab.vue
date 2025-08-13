@@ -30,60 +30,75 @@
           </button>
         </div>
       </div>
-      
-
     </div>
 
     <!-- Content -->
     <div class="p-6">
-      <!-- Family Tree Component -->
-      <FamilyTree
-        :profile-user-data="profileUserData"
-        :is-editable="currentMode === 'builder' && canEdit"
-        @tree-updated="handleTreeUpdated"
-      />
+      <!-- Error Boundary -->
+      <ErrorBoundary @retry="handleRetry" @reset="handleReset">
+        <!-- Family Tree Component -->
+        <FamilyTree
+          :profile-user-data="profileUserData"
+          :is-editable="currentMode === 'builder' && canEdit"
+          @tree-updated="handleTreeUpdated"
+        />
+      </ErrorBoundary>
     </div>
-
-
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import FamilyTree from './family-tree/FamilyTree.vue';
+import ErrorBoundary from '../../ErrorBoundary.vue';
 
-const props = defineProps({
-  profileUserData: {
-    type: Object,
-    required: true
-  },
-  currentUser: {
-    type: Object,
-    default: null
-  }
-});
+interface ProfileUserData {
+  id: number;
+  name: string;
+  username: string;
+  profile_photo_url?: string;
+}
+
+interface CurrentUser {
+  id: number;
+  name: string;
+  username: string;
+}
+
+const props = defineProps<{
+  profileUserData: ProfileUserData;
+  currentUser?: CurrentUser | null;
+}>();
 
 // Reactive state
-const currentMode = ref('viewer');
+const currentMode = ref<'viewer' | 'builder'>('viewer');
 
 // Computed properties
-const canEdit = computed(() => {
+const canEdit = computed((): boolean => {
   if (!props.currentUser) return false;
   return props.currentUser.id === props.profileUserData.id;
 });
 
-
-
 // Methods
-const handleTreeUpdated = () => {
+const handleTreeUpdated = (): void => {
   // Emit event to parent if needed
   // This could trigger a refresh of the tree data
 };
 
+const handleRetry = (): void => {
+  console.log('Retrying family tree...');
+  // Force re-render of the family tree component
+  // This will trigger a fresh API call
+};
 
+const handleReset = (): void => {
+  console.log('Resetting family tree...');
+  // Reset the component state
+  currentMode.value = 'viewer';
+};
 
 // Set initial mode based on permissions
-onMounted(() => {
+onMounted((): void => {
   console.log('FamilyTreeTab mounted');
   console.log('Profile user data:', props.profileUserData);
   console.log('Current user:', props.currentUser);

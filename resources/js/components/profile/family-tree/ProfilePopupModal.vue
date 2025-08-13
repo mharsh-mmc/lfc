@@ -136,22 +136,31 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps({
-  profile: {
-    type: Object,
-    required: true
-  },
-  currentUserId: {
-    type: [String, Number],
-    default: null
-  }
-});
+interface ProfileData {
+  id: number;
+  name: string;
+  username: string;
+  profile_photo_url?: string;
+  relation: string;
+  date_of_birth?: string;
+  location?: string;
+  bio?: string;
+  profession?: string;
+  passion?: string;
+  mission?: string;
+  calling?: string;
+}
+
+const props = defineProps<{
+  profile: ProfileData;
+  currentUserId?: string | number | null;
+}>();
 
 // Add reactive profile data with fallbacks
-const profileData = computed(() => {
+const profileData = computed((): ProfileData => {
   return {
     id: props.profile.id,
     name: props.profile.name || 'Unknown',
@@ -168,11 +177,9 @@ const profileData = computed(() => {
   };
 });
 
-const emit = defineEmits(['close']);
-
 // Computed properties
-const getRelationBadgeClass = (relation) => {
-  const classes = {
+const getRelationBadgeClass = (relation: string): string => {
+  const classes: Record<string, string> = {
     'self': 'bg-blue-100 text-blue-800',
     'parent': 'bg-green-100 text-green-800',
     'child': 'bg-purple-100 text-purple-800',
@@ -207,8 +214,8 @@ const getRelationBadgeClass = (relation) => {
   return classes[relation] || 'bg-gray-100 text-gray-800';
 };
 
-const formatRelation = (relation) => {
-  const labels = {
+const formatRelation = (relation: string): string => {
+  const labels: Record<string, string> = {
     'self': 'You',
     'parent': 'Parent',
     'child': 'Child',
@@ -243,7 +250,7 @@ const formatRelation = (relation) => {
   return labels[relation] || relation;
 };
 
-const formatDate = (dateString) => {
+const formatDate = (dateString: string): string => {
   if (!dateString) return '';
   try {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -251,14 +258,19 @@ const formatDate = (dateString) => {
       month: 'long',
       day: 'numeric'
     });
-  } catch (error) {
+  } catch {
     return dateString;
   }
 };
 
-const viewFullProfile = () => {
-  if (profileData.value.id) {
-    window.open(`/profile/${profileData.value.id}`, '_blank');
+const viewFullProfile = (): void => {
+  try {
+    if (profileData.value.id) {
+      window.open(`/profile/${profileData.value.id}`, '_blank');
+    }
+  } catch (error) {
+    console.error('Error opening profile:', error);
+    alert('Failed to open profile. Please try again.');
   }
 };
 </script>

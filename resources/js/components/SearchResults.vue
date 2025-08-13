@@ -120,70 +120,90 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue';
+<script setup lang="ts">
+import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 
-const props = defineProps({
-  showResults: {
-    type: Boolean,
-    default: false
-  },
-  searchTerm: {
-    type: String,
-    default: ''
-  },
-  searchResults: {
-    type: Object,
-    default: () => ({})
-  },
-  loading: {
-    type: Boolean,
-    default: false
-  }
-});
+interface Profile {
+  id: number;
+  name: string;
+  profession?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  bio?: string;
+  profile_photo_url?: string;
+}
 
-const emit = defineEmits(['close']);
+interface SearchResultsData {
+  data: Profile[];
+  total: number;
+  current_page: number;
+  last_page: number;
+}
 
-const closeResults = () => {
+const props = defineProps<{
+  showResults: boolean;
+  searchTerm: string;
+  searchResults: SearchResultsData;
+  loading: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  'page-change': [page: number];
+}>();
+
+const closeResults = (): void => {
   emit('close');
 };
 
-const profiles = computed(() => props.searchResults.data || []);
-const totalResults = computed(() => props.searchResults.total || 0);
-const currentPage = computed(() => props.searchResults.current_page || 1);
-const totalPages = computed(() => props.searchResults.last_page || 1);
+const profiles = computed((): Profile[] => props.searchResults.data || []);
+const totalResults = computed((): number => props.searchResults.total || 0);
+const currentPage = computed((): number => props.searchResults.current_page || 1);
+const totalPages = computed((): number => props.searchResults.last_page || 1);
 
-const formatLocation = (profile) => {
+const formatLocation = (profile: Profile): string => {
   const parts = [profile.city, profile.state, profile.country].filter(Boolean);
   return parts.join(', ');
 };
 
-const truncateBio = (bio) => {
+const truncateBio = (bio: string): string => {
   if (!bio) return '';
   return bio.length > 120 ? bio.substring(0, 120) + '...' : bio;
 };
 
-const handleImageError = (event) => {
-  event.target.src = '/default-avatar.svg';
+const handleImageError = (event: Event): void => {
+  const target = event.target as HTMLImageElement;
+  target.src = '/default-avatar.svg';
 };
 
-const viewProfile = (profile) => {
-  router.visit(`/profile/${profile.id}`);
+const viewProfile = (profile: Profile): void => {
+  try {
+    router.visit(`/profile/${profile.id}`);
+  } catch (error) {
+    console.error('Error navigating to profile:', error);
+    // Fallback to window.location if router fails
+    window.location.href = `/profile/${profile.id}`;
+  }
 };
 
-const changePage = (page) => {
+const changePage = (page: number): void => {
   if (page >= 1 && page <= totalPages.value) {
     emit('page-change', page);
   }
 };
 
-const browseMemorials = () => {
-  closeResults();
-  // Scroll to tribute grid section
-  const tributeSection = document.querySelector('.bg-[#1E3A8A]');
-  if (tributeSection) {
-    tributeSection.scrollIntoView({ behavior: 'smooth' });
+const browseMemorials = (): void => {
+  try {
+    closeResults();
+    // Scroll to tribute grid section
+    const tributeSection = document.querySelector('.bg-[#1E3A8A]');
+    if (tributeSection) {
+      tributeSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    console.error('Error scrolling to memorials:', error);
   }
 };
 </script>
