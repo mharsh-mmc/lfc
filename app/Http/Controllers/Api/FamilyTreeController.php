@@ -40,6 +40,14 @@ class FamilyTreeController extends Controller
             ->with('profile:id,name,username,profile_photo_path,date_of_birth,location,bio,profession,passion')
             ->get();
 
+        // If no nodes exist, create the central node for the user
+        if ($nodes->isEmpty()) {
+            $this->createCentralNode($userId, $user);
+            $nodes = FamilyTreeNode::where('user_id', $userId)
+                ->with('profile:id,name,username,profile_photo_path,date_of_birth,location,bio,profession,passion')
+                ->get();
+        }
+
         $edges = FamilyTreeEdge::where('user_id', $userId)->get();
 
         // Convert edges to Vue Flow format
@@ -61,6 +69,27 @@ class FamilyTreeController extends Controller
             'nodes' => $nodes,
             'edges' => $vueFlowEdges,
         ]);
+    }
+
+    /**
+     * Create the central node for a user (their own profile)
+     */
+    private function createCentralNode($userId, $user): void
+    {
+        // Check if central node already exists
+        $existingCentralNode = FamilyTreeNode::where('user_id', $userId)
+            ->where('profile_id', $userId)
+            ->first();
+
+        if (!$existingCentralNode) {
+            FamilyTreeNode::create([
+                'user_id' => $userId,
+                'profile_id' => $userId,
+                'relation' => 'self',
+                'x_position' => 400, // Center position
+                'y_position' => 300, // Center position
+            ]);
+        }
     }
 
     /**

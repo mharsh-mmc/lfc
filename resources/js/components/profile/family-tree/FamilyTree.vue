@@ -181,11 +181,12 @@
             @node-drag-stop="handleNodeDragStop"
             @node-click="handleNodeClick"
             @edge-click="handleEdgeClick"
+            @edge-double-click="handleEdgeDoubleClick"
+            @edge-context-menu="handleEdgeContextMenu"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
             @selection-change="handleSelectionChange"
             @node-double-click="handleNodeDoubleClick"
-            @edge-double-click="handleEdgeDoubleClick"
           >
             <!-- Background -->
             <Background :pattern-color="'#94a3b8'" :gap="20" />
@@ -486,19 +487,50 @@ const addPersonToTree = async (person: any): Promise<void> => {
     const personData = person.node ? person.node : person;
     const profileData = personData.profile ? personData.profile : personData;
     
+    // Find center node for positioning
+    const centerNode = elements.value.find(el => 
+      el.type === 'familyNode' && (el as TreeNode).data.relation === 'self'
+    ) as TreeNode;
+
+    if (!centerNode) {
+      alert('Center node not found. Please refresh the page.');
+      return;
+    }
+
+    // Calculate intelligent position relative to center node
+    const spacing = 200;
+    const existingNodes = elements.value.filter(el => 
+      el.type === 'familyNode' && (el as TreeNode).data.relation !== 'self'
+    );
+    
+    let newX = centerNode.position.x + spacing;
+    let newY = centerNode.position.y;
+    
+    // Avoid overlapping with existing nodes
+    while (existingNodes.some(node => 
+      Math.abs((node as TreeNode).position.x - newX) < 100 && 
+      Math.abs((node as TreeNode).position.y - newY) < 100
+    )) {
+      newX += spacing;
+      if (newX > centerNode.position.x + 600) {
+        newX = centerNode.position.x - spacing;
+        newY += spacing;
+      }
+    }
+
     const newNode: TreeNode = {
       id: profileData.id.toString(),
       type: 'familyNode',
       position: { 
-        x: personData.x_position || personData.x || Math.random() * 200 - 100, 
-        y: personData.y_position || personData.y || Math.random() * 200 - 100 
+        x: newX, 
+        y: newY 
       },
       data: {
         id: profileData.id,
         name: profileData.name,
         username: profileData.username,
         profile_photo_url: profileData.profile_photo_url || profileData.profile_photo_path ? `/storage/${profileData.profile_photo_path}` : undefined,
-        relation: personData.relation || 'family',
+        relation: personData.relation || 'friend',
         showDetails: !performanceMode.value,
         // Add additional profile data
         date_of_birth: profileData.date_of_birth,
@@ -510,10 +542,56 @@ const addPersonToTree = async (person: any): Promise<void> => {
         calling: profileData.calling
       }
     };
-    
-    console.log('Created new node:', newNode);
+
+    // Add to tree
     elements.value = [...elements.value, newNode];
+    
+    // Save to backend if not already saved
+    if (!personData.node_id) {
+      try {
+        const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/node`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          },
+          body: JSON.stringify({
+            profile_id: profileData.id,
+            relation: personData.relation || 'friend',
+            x_position: Math.round(newX),
+            y_position: Math.round(newY)
+          })
+        });
+
+        if (response.ok) {
+          const savedNode = await response.json();
+          console.log('Node added successfully:', savedNode);
+          
+          // Update node with backend data
+          const updatedElements = elements.value.map(el => {
+            if (el.id === newNode.id) {
+              return {
+                ...el,
+                data: {
+                  ...el.data,
+                  node_id: savedNode.id
+                }
+              };
+            }
+            return el;
+          });
+          elements.value = updatedElements;
+        } else {
+          throw new Error('Failed to save node to backend');
+        }
+      } catch (error) {
+        console.error('Failed to save node:', error);
+        alert('Profile added to tree but failed to save. Please try saving the tree manually.');
+      }
+    }
+    
     emit('tree-updated');
+    console.log('Person added to tree successfully:', newNode);
   } catch (error) {
     console.error('Error adding person to tree:', error);
     alert('Failed to add person to tree. Please try again.');
@@ -526,59 +604,140 @@ const handleSearch = async (): Promise<void> => {
     searchResults.value = [];
     return;
   }
-  
+
   try {
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/search?q=${encodeURIComponent(searchQuery.value)}`, {
       headers: {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
       }
     });
-    
+
     if (response.ok) {
       const data = await response.json();
-      searchResults.value = data.profiles || [];
+      // Filter out profiles that are already in the tree
+      const existingProfileIds = elements.value
+        .filter(el => el.type === 'familyNode')
+        .map(el => (el as TreeNode).data.id);
+      
+      searchResults.value = data.profiles.filter((profile: any) => 
+        !existingProfileIds.includes(profile.id)
+      );
     } else {
-      console.error('Search failed:', response.status, response.statusText);
+      console.error('Search failed:', response.status);
       searchResults.value = [];
     }
   } catch (error) {
     console.error('Search error:', error);
     searchResults.value = [];
-    alert('Search failed. Please try again.');
   }
 };
 
-const addSearchResultToTree = (profile: SearchResult): void => {
+const addSearchResultToTree = async (profile: any): Promise<void> => {
   try {
-    // Check if profile already exists in tree
-    const exists = elements.value.some(el => 
-      el.type === 'familyNode' && (el as TreeNode).data.id === profile.id
-    );
-    
-    if (exists) {
-      alert('This profile is already in the tree!');
+    // Find center node for positioning
+    const centerNode = elements.value.find(el => 
+      el.type === 'familyNode' && (el as TreeNode).data.relation === 'self'
+    ) as TreeNode;
+
+    if (!centerNode) {
+      alert('Center node not found. Please refresh the page.');
       return;
     }
+
+    // Calculate position relative to center node
+    const spacing = 200;
+    const existingNodes = elements.value.filter(el => 
+      el.type === 'familyNode' && (el as TreeNode).data.relation !== 'self'
+    );
     
+    let newX = centerNode.position.x + spacing;
+    let newY = centerNode.position.y;
+    
+    // Avoid overlapping with existing nodes
+    while (existingNodes.some(node => 
+      Math.abs((node as TreeNode).position.x - newX) < 100 && 
+      Math.abs((node as TreeNode).position.y - newY) < 100
+    )) {
+      newX += spacing;
+      if (newX > centerNode.position.x + 600) {
+        newX = centerNode.position.x - spacing;
+        newY += spacing;
+      }
+    }
+
+    // Create new node
     const newNode: TreeNode = {
       id: profile.id.toString(),
       type: 'familyNode',
-      position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 },
+      position: { x: newX, y: newY },
       data: {
         id: profile.id,
         name: profile.name,
         username: profile.username,
-        profile_photo_url: profile.profile_photo_url,
-        relation: 'family',
-        showDetails: !performanceMode.value
+        profile_photo_url: profile.profile_photo_path ? `/storage/${profile.profile_photo_path}` : undefined,
+        relation: 'friend', // Default relation, can be changed later
+        showDetails: !performanceMode.value,
+        date_of_birth: profile.date_of_birth,
+        location: profile.location,
+        bio: profile.bio,
+        profession: profile.profession,
+        passion: profile.passion,
+        mission: profile.mission,
+        calling: profile.calling
       }
     };
-    
+
+    // Add to tree
     elements.value = [...elements.value, newNode];
+    
+    // Clear search
     searchQuery.value = '';
-    showSearchResults.value = false;
     searchResults.value = [];
-    emit('tree-updated');
+    showSearchResults.value = false;
+    
+    // Save to backend
+    try {
+      const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/node`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: JSON.stringify({
+          profile_id: profile.id,
+          relation: 'friend',
+          x_position: Math.round(newX),
+          y_position: Math.round(newY)
+        })
+      });
+
+      if (response.ok) {
+        const savedNode = await response.json();
+        console.log('Node added successfully:', savedNode);
+        
+        // Update node with backend data
+        const updatedElements = elements.value.map(el => {
+          if (el.id === newNode.id) {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                node_id: savedNode.id
+              }
+            };
+          }
+          return el;
+        });
+        elements.value = updatedElements;
+        
+        emit('tree-updated');
+      } else {
+        throw new Error('Failed to save node to backend');
+      }
+    } catch (error) {
+      console.error('Failed to save node:', error);
+      alert('Profile added to tree but failed to save. Please try saving the tree manually.');
+    }
   } catch (error) {
     console.error('Error adding search result to tree:', error);
     alert('Failed to add profile to tree. Please try again.');
@@ -801,7 +960,7 @@ const applyHierarchicalLayout = (): void => {
 };
 
 // Vue Flow event handlers
-const handleConnect = (params: any): void => {
+const handleConnect = async (params: any): Promise<void> => {
   try {
     // Validate connection
     if (params.source === params.target) {
@@ -820,7 +979,8 @@ const handleConnect = (params: any): void => {
       alert('Connection already exists!');
       return;
     }
-    
+
+    // Create new edge in Vue Flow format
     const newEdge: TreeEdge = {
       id: `e${params.source}-${params.target}`,
       source: params.source,
@@ -828,16 +988,67 @@ const handleConnect = (params: any): void => {
       type: 'default',
       data: { relationship_type: 'family' }
     };
+
+    // Add to local elements immediately for visual feedback
     elements.value = [...elements.value, newEdge];
-    emit('tree-updated');
+
+    // Save edge to backend
+    try {
+      const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/edge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: JSON.stringify({
+          from_node_id: params.source,
+          to_node_id: params.target,
+          relationship_type: 'family',
+          edge_type: 'bezier'
+        })
+      });
+
+      if (response.ok) {
+        const savedEdge = await response.json();
+        console.log('Edge saved successfully:', savedEdge);
+        
+        // Update the edge with backend data
+        const updatedElements = elements.value.map(el => {
+          if (el.id === newEdge.id) {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                edge_id: savedEdge.data.edge_id,
+                user_id: savedEdge.data.user_id
+              }
+            };
+          }
+          return el;
+        });
+        elements.value = updatedElements;
+        
+        emit('tree-updated');
+      } else {
+        // Remove the edge if backend save failed
+        elements.value = elements.value.filter(el => el.id !== newEdge.id);
+        throw new Error('Failed to save edge to backend');
+      }
+    } catch (error) {
+      console.error('Failed to save edge:', error);
+      alert('Failed to create connection. Please try again.');
+      // Remove the edge from local elements
+      elements.value = elements.value.filter(el => el.id !== newEdge.id);
+    }
   } catch (error) {
     console.error('Error handling connection:', error);
     alert('Failed to create connection. Please try again.');
   }
 };
 
-const handleNodeDragStop = (event: any, node: TreeNode): void => {
+const handleNodeDragStop = async (event: any, node: TreeNode): Promise<void> => {
   try {
+    // Update local elements immediately for visual feedback
     const updatedElements = elements.value.map(el => {
       if (el.id === node.id) {
         return { ...el, position: node.position };
@@ -845,6 +1056,30 @@ const handleNodeDragStop = (event: any, node: TreeNode): void => {
       return el;
     });
     elements.value = updatedElements;
+
+    // Save node position to backend
+    try {
+      const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/node/${node.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: JSON.stringify({
+          x_position: Math.round(node.position.x),
+          y_position: Math.round(node.position.y)
+        })
+      });
+
+      if (response.ok) {
+        console.log('Node position saved successfully');
+      } else {
+        console.error('Failed to save node position');
+      }
+    } catch (error) {
+      console.error('Error saving node position:', error);
+    }
+
     emit('tree-updated');
   } catch (error) {
     console.error('Error handling node drag stop:', error);
@@ -884,9 +1119,126 @@ const handleEdgeClick = (event: any, edge: TreeEdge): void => {
   }
 };
 
-const handleEdgeDoubleClick = (event: any, edge: TreeEdge): void => {
-  // Enter edit mode for edge
-  console.log('Edit edge:', edge);
+const handleEdgeDoubleClick = async (event: any, edge: TreeEdge): Promise<void> => {
+  try {
+    const newRelation = prompt('Enter relationship type:', edge.data.relationship_type || 'family');
+    if (newRelation) {
+      // Update local edge immediately
+      const updatedElements = elements.value.map(el => {
+        if (el.id === edge.id) {
+          return { ...el, data: { ...el.data, relationship_type: newRelation } };
+        }
+        return el;
+      });
+      elements.value = updatedElements;
+
+      // Save to backend
+      try {
+        const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/edge/${edge.data.edge_id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          },
+          body: JSON.stringify({
+            relationship_type: newRelation
+          })
+        });
+
+        if (response.ok) {
+          console.log('Edge updated successfully');
+        } else {
+          throw new Error('Failed to update edge');
+        }
+      } catch (error) {
+        console.error('Failed to update edge:', error);
+        alert('Edge updated locally but failed to save. Please try saving the tree manually.');
+      }
+
+      emit('tree-updated');
+    }
+  } catch (error) {
+    console.error('Error handling edge double click:', error);
+    alert('Failed to update relationship. Please try again.');
+  }
+};
+
+const deleteEdge = async (edge: TreeEdge): Promise<void> => {
+  try {
+    if (confirm('Are you sure you want to delete this connection?')) {
+      // Remove from local elements
+      elements.value = elements.value.filter(el => el.id !== edge.id);
+
+      // Delete from backend
+      if (edge.data.edge_id) {
+        try {
+          const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/edge/${edge.data.edge_id}`, {
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+          });
+
+          if (response.ok) {
+            console.log('Edge deleted successfully');
+          } else {
+            throw new Error('Failed to delete edge');
+          }
+        } catch (error) {
+          console.error('Failed to delete edge:', error);
+          alert('Edge removed locally but failed to delete from server. Please try saving the tree manually.');
+        }
+      }
+
+      emit('tree-updated');
+    }
+  } catch (error) {
+    console.error('Error deleting edge:', error);
+    alert('Failed to delete connection. Please try again.');
+  }
+};
+
+const handleEdgeContextMenu = (event: any, edge: TreeEdge): void => {
+  event.preventDefault();
+  
+  // Create context menu
+  const menu = document.createElement('div');
+  menu.className = 'fixed bg-white border border-gray-300 rounded-md shadow-lg z-50 p-2';
+  menu.style.left = event.clientX + 'px';
+  menu.style.top = event.clientY + 'px';
+  
+  const editOption = document.createElement('div');
+  editOption.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+  editOption.textContent = 'Edit Relationship';
+  editOption.onclick = () => {
+    handleEdgeDoubleClick(event, edge);
+    document.body.removeChild(menu);
+  };
+  
+  const deleteOption = document.createElement('div');
+  deleteOption.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm text-red-600';
+  deleteOption.textContent = 'Delete Connection';
+  deleteOption.onclick = () => {
+    deleteEdge(edge);
+    document.body.removeChild(menu);
+  };
+  
+  menu.appendChild(editOption);
+  menu.appendChild(deleteOption);
+  
+  // Remove menu when clicking elsewhere
+  const removeMenu = () => {
+    if (document.body.contains(menu)) {
+      document.body.removeChild(menu);
+    }
+    document.removeEventListener('click', removeMenu);
+  };
+  
+  setTimeout(() => {
+    document.addEventListener('click', removeMenu);
+  }, 100);
+  
+  document.body.appendChild(menu);
 };
 
 const handlePaneClick = (): void => {

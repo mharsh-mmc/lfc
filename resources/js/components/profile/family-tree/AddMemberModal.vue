@@ -366,9 +366,11 @@ const handleSubmit = async (): Promise<void> => {
       formData.append('calling', form.calling.trim());
     }
     
-    // Position for the tree node
-    formData.append('x_position', Math.floor(Math.random() * 400 - 200).toString());
-    formData.append('y_position', Math.floor(Math.random() * 400 - 200).toString());
+    // Calculate position relative to center node (will be calculated in the parent component)
+    const randomX = Math.floor(Math.random() * 400 - 200);
+    const randomY = Math.floor(Math.random() * 400 - 200);
+    formData.append('x_position', randomX.toString());
+    formData.append('y_position', randomY.toString());
     
     // Profile photo if selected
     if (profilePhotoFile.value) {
@@ -402,13 +404,16 @@ const handleSubmit = async (): Promise<void> => {
       const treeNode = {
         node: newProfile.node,
         relation: newProfile.node.relation,
-        x_position: Math.random() * 400 - 200,
-        y_position: Math.random() * 400 - 200
+        x_position: randomX,
+        y_position: randomY
       };
       
       console.log('Emitting treeNode:', treeNode);
       emit('add-person', treeNode);
       emit('close');
+      
+      // Show success message
+      alert('Family member created and added to tree successfully!');
     } else {
       const errorData = await response.json();
       console.error('Error response:', errorData);
