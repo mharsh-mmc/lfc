@@ -239,20 +239,50 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive } from 'vue';
 
-const props = defineProps({
-  profileUserData: {
-    type: Object,
-    required: true
-  }
-});
+interface ProfileUserData {
+  id: number;
+  name: string;
+  username: string;
+}
 
-const emit = defineEmits(['close', 'add-person']);
+interface FormData {
+  name: string;
+  username: string;
+  relation: string;
+  date_of_birth: string;
+  location: string;
+  bio: string;
+  profession: string;
+  passion: string;
+  mission: string;
+  calling: string;
+}
+
+interface CreatedProfile {
+  node: {
+    id: number;
+    name: string;
+    username: string;
+    relation: string;
+    x_position: number;
+    y_position: number;
+  };
+}
+
+const props = defineProps<{
+  profileUserData: ProfileUserData;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  'add-person': [person: any];
+}>();
 
 // Form state
-const form = reactive({
+const form = reactive<FormData>({
   name: '',
   username: '',
   relation: 'parent',
@@ -267,28 +297,37 @@ const form = reactive({
 
 // UI state
 const isSubmitting = ref(false);
-const profilePhotoPreview = ref(null);
-const profilePhotoFile = ref(null);
-const fileInput = ref(null);
+const profilePhotoPreview = ref<string | null>(null);
+const profilePhotoFile = ref<File | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
 
 // Methods
-const triggerFileInput = () => {
+const triggerFileInput = (): void => {
   fileInput.value?.click();
 };
 
-const handlePhotoChange = (event) => {
-  const file = event.target.files[0];
-  if (file) {
-    profilePhotoFile.value = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      profilePhotoPreview.value = e.target.result;
-    };
-    reader.readAsDataURL(file);
+const handlePhotoChange = (event: Event): void => {
+  try {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) {
+      profilePhotoFile.value = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          profilePhotoPreview.value = result;
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  } catch (error) {
+    console.error('Error handling photo change:', error);
+    alert('Failed to process photo. Please try again.');
   }
 };
 
-const handleSubmit = async () => {
+const handleSubmit = async (): Promise<void> => {
   console.log('Form submission started');
   if (!form.name.trim()) return;
   
@@ -328,8 +367,8 @@ const handleSubmit = async () => {
     }
     
     // Position for the tree node
-    formData.append('x_position', Math.floor(Math.random() * 400 - 200));
-    formData.append('y_position', Math.floor(Math.random() * 400 - 200));
+    formData.append('x_position', Math.floor(Math.random() * 400 - 200).toString());
+    formData.append('y_position', Math.floor(Math.random() * 400 - 200).toString());
     
     // Profile photo if selected
     if (profilePhotoFile.value) {
@@ -337,13 +376,17 @@ const handleSubmit = async () => {
     }
 
     console.log('FormData created, sending request to API');
-    console.log('CSRF Token:', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'));
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!csrfToken) {
+      throw new Error('CSRF token not found');
+    }
+    console.log('CSRF Token:', csrfToken);
 
     // Create profile and add to tree
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/create-profile`, {
       method: 'POST',
       headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        'X-CSRF-TOKEN': csrfToken
       },
       body: formData
     });
@@ -352,7 +395,7 @@ const handleSubmit = async () => {
     console.log('Response status:', response.status);
 
     if (response.ok) {
-      const newProfile = await response.json();
+      const newProfile: CreatedProfile = await response.json();
       console.log('Profile created successfully:', newProfile);
       
       // Add to tree with proper data structure
@@ -373,7 +416,8 @@ const handleSubmit = async () => {
     }
   } catch (error) {
     console.error('Failed to create profile:', error);
-    alert('Failed to create profile. Please try again.');
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create profile. Please try again.';
+    alert(errorMessage);
   } finally {
     isSubmitting.value = false;
   }

@@ -278,8 +278,8 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { VueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -289,41 +289,100 @@ import '@vue-flow/core/dist/theme-default.css';
 import FamilyTreeNode from './FamilyTreeNode.vue';
 import AddMemberModal from './AddMemberModal.vue';
 import ProfilePopupModal from './ProfilePopupModal.vue';
+import { initializeApiVerification } from '../../../utils/apiVerification';
 
-const props = defineProps({
-  profileUserData: {
-    type: Object,
-    required: true
-  },
-  isEditable: {
-    type: Boolean,
-    default: false
-  }
-});
+// Types
+interface ProfileUserData {
+  id: number;
+  name: string;
+  username: string;
+  profile_photo_url?: string;
+  date_of_birth?: string;
+  location?: string;
+  bio?: string;
+  profession?: string;
+  passion?: string;
+  mission?: string;
+  calling?: string;
+}
 
-const emit = defineEmits(['tree-updated']);
+interface TreeNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  data: {
+    id: number;
+    name: string;
+    username: string;
+    profile_photo_url?: string;
+    relation: string;
+    showDetails: boolean;
+    date_of_birth?: string;
+    location?: string;
+    bio?: string;
+    profession?: string;
+    passion?: string;
+    mission?: string;
+    calling?: string;
+  };
+}
+
+interface TreeEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  data: { relationship_type: string };
+}
+
+interface SearchResult {
+  id: number;
+  name: string;
+  username: string;
+  profile_photo_url?: string;
+}
+
+interface TreeData {
+  nodes: Array<{
+    id: number;
+    profile?: ProfileUserData;
+    relation: string;
+    x_position: number;
+    y_position: number;
+  }>;
+  edges?: TreeEdge[];
+}
+
+const props = defineProps<{
+  profileUserData: ProfileUserData;
+  isEditable: boolean;
+}>();
+
+const emit = defineEmits<{
+  'tree-updated': [];
+}>();
 
 // Component state
-const elements = ref([]);
+const elements = ref<(TreeNode | TreeEdge)[]>([]);
 const isBuilderMode = ref(props.isEditable);
 const showAddMemberModal = ref(false);
 const showProfilePopup = ref(false);
-const selectedProfile = ref(null);
+const selectedProfile = ref<ProfileUserData | null>(null);
 const isGeneratingLayout = ref(false);
 const isSaving = ref(false);
 const isLoading = ref(true);
 const hasLoadedTree = ref(false);
 
 // Advanced features state
-const currentLayout = ref('custom');
+const currentLayout = ref<'custom' | 'vertical' | 'horizontal' | 'circular' | 'hierarchical'>('custom');
 const performanceMode = ref(false);
 const showHelperLines = ref(false);
 const isTakingScreenshot = ref(false);
 const searchQuery = ref('');
-const searchResults = ref([]);
+const searchResults = ref<SearchResult[]>([]);
 const showSearchResults = ref(false);
-const selectedElements = ref([]);
-const vueFlowContainer = ref(null);
+const selectedElements = ref<(TreeNode | TreeEdge)[]>([]);
+const vueFlowContainer = ref<HTMLElement | null>(null);
 
 // Vue Flow node types
 const nodeTypes = {
@@ -336,28 +395,28 @@ const edgeTypes = {
 };
 
 // Methods
-const toggleMode = () => {
+const toggleMode = (): void => {
   isBuilderMode.value = !isBuilderMode.value;
 };
 
 // Load existing tree data
-const loadTreeData = async () => {
+const loadTreeData = async (): Promise<void> => {
   if (hasLoadedTree.value) return;
   
   try {
     isLoading.value = true;
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree`, {
       headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
       }
     });
     
     if (response.ok) {
-      const treeData = await response.json();
+      const treeData: TreeData = await response.json();
       console.log('Loaded tree data:', treeData);
       
       // Convert backend data to VueFlow format
-      const vueFlowNodes = treeData.nodes.map(node => ({
+      const vueFlowNodes: TreeNode[] = treeData.nodes.map(node => ({
         id: node.id.toString(),
         type: 'familyNode',
         position: { x: node.x_position, y: node.y_position },
@@ -365,7 +424,7 @@ const loadTreeData = async () => {
           id: node.id,
           name: node.profile?.name || 'Unknown',
           username: node.profile?.username || 'No username',
-          profile_photo_url: node.profile?.profile_photo_path ? `/storage/${node.profile.profile_photo_path}` : null,
+          profile_photo_url: node.profile?.profile_photo_path ? `/storage/${node.profile.profile_photo_path}` : undefined,
           relation: node.relation,
           showDetails: !performanceMode.value,
           // Add additional profile data
@@ -386,15 +445,19 @@ const loadTreeData = async () => {
       hasLoadedTree.value = true;
       
       console.log('VueFlow elements set:', elements.value);
+    } else {
+      console.error('Failed to load tree data:', response.status, response.statusText);
     }
   } catch (error) {
     console.error('Failed to load tree data:', error);
+    // Show user-friendly error message
+    alert('Failed to load family tree. Please refresh the page and try again.');
   } finally {
     isLoading.value = false;
   }
 };
 
-const togglePerformanceMode = () => {
+const togglePerformanceMode = (): void => {
   performanceMode.value = !performanceMode.value;
   // Update node details visibility based on performance mode
   elements.value = elements.value.map(el => {
@@ -411,49 +474,54 @@ const togglePerformanceMode = () => {
   });
 };
 
-const toggleHelperLines = () => {
+const toggleHelperLines = (): void => {
   showHelperLines.value = !showHelperLines.value;
 };
 
-const addPersonToTree = async (person) => {
+const addPersonToTree = async (person: any): Promise<void> => {
   console.log('Adding person to tree:', person);
   
-  // Handle both person objects and treeNode objects from the modal
-  const personData = person.node ? person.node : person;
-  const profileData = personData.profile ? personData.profile : personData;
-  
-  const newNode = {
-    id: profileData.id.toString(),
-    type: 'familyNode',
-    position: { 
-      x: personData.x_position || personData.x || Math.random() * 200 - 100, 
-      y: personData.y_position || personData.y || Math.random() * 200 - 100 
-    },
-    data: {
-      id: profileData.id,
-      name: profileData.name,
-      username: profileData.username,
-      profile_photo_url: profileData.profile_photo_url || profileData.profile_photo_path ? `/storage/${profileData.profile_photo_path}` : null,
-      relation: personData.relation || 'family',
-      showDetails: !performanceMode.value,
-      // Add additional profile data
-      date_of_birth: profileData.date_of_birth,
-      location: profileData.location,
-      bio: profileData.bio,
-      profession: profileData.profession,
-      passion: profileData.passion,
-      mission: profileData.mission,
-      calling: profileData.calling
-    }
-  };
-  
-  console.log('Created new node:', newNode);
-  elements.value = [...elements.value, newNode];
-  emit('tree-updated');
+  try {
+    // Handle both person objects and treeNode objects from the modal
+    const personData = person.node ? person.node : person;
+    const profileData = personData.profile ? personData.profile : personData;
+    
+    const newNode: TreeNode = {
+      id: profileData.id.toString(),
+      type: 'familyNode',
+      position: { 
+        x: personData.x_position || personData.x || Math.random() * 200 - 100, 
+        y: personData.y_position || personData.y || Math.random() * 200 - 100 
+      },
+      data: {
+        id: profileData.id,
+        name: profileData.name,
+        username: profileData.username,
+        profile_photo_url: profileData.profile_photo_url || profileData.profile_photo_path ? `/storage/${profileData.profile_photo_path}` : undefined,
+        relation: personData.relation || 'family',
+        showDetails: !performanceMode.value,
+        // Add additional profile data
+        date_of_birth: profileData.date_of_birth,
+        location: profileData.location,
+        bio: profileData.bio,
+        profession: profileData.profession,
+        passion: profileData.passion,
+        mission: profileData.mission,
+        calling: profileData.calling
+      }
+    };
+    
+    console.log('Created new node:', newNode);
+    elements.value = [...elements.value, newNode];
+    emit('tree-updated');
+  } catch (error) {
+    console.error('Error adding person to tree:', error);
+    alert('Failed to add person to tree. Please try again.');
+  }
 };
 
 // Search functionality
-const handleSearch = async () => {
+const handleSearch = async (): Promise<void> => {
   if (searchQuery.value.length < 2) {
     searchResults.value = [];
     return;
@@ -462,53 +530,63 @@ const handleSearch = async () => {
   try {
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/search?q=${encodeURIComponent(searchQuery.value)}`, {
       headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
       }
     });
     
     if (response.ok) {
       const data = await response.json();
       searchResults.value = data.profiles || [];
+    } else {
+      console.error('Search failed:', response.status, response.statusText);
+      searchResults.value = [];
     }
   } catch (error) {
     console.error('Search error:', error);
+    searchResults.value = [];
+    alert('Search failed. Please try again.');
   }
 };
 
-const addSearchResultToTree = (profile) => {
-  // Check if profile already exists in tree
-  const exists = elements.value.some(el => 
-    el.type === 'familyNode' && el.data.id === profile.id
-  );
-  
-  if (exists) {
-    alert('This profile is already in the tree!');
-    return;
-  }
-  
-  const newNode = {
-    id: profile.id.toString(),
-    type: 'familyNode',
-    position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 },
-    data: {
-      id: profile.id,
-      name: profile.name,
-      username: profile.username,
-      profile_photo_url: profile.profile_photo_url,
-      relation: 'family',
-      showDetails: !performanceMode.value
+const addSearchResultToTree = (profile: SearchResult): void => {
+  try {
+    // Check if profile already exists in tree
+    const exists = elements.value.some(el => 
+      el.type === 'familyNode' && (el as TreeNode).data.id === profile.id
+    );
+    
+    if (exists) {
+      alert('This profile is already in the tree!');
+      return;
     }
-  };
-  
-  elements.value = [...elements.value, newNode];
-  searchQuery.value = '';
-  showSearchResults.value = false;
-  searchResults.value = [];
-  emit('tree-updated');
+    
+    const newNode: TreeNode = {
+      id: profile.id.toString(),
+      type: 'familyNode',
+      position: { x: Math.random() * 200 - 100, y: Math.random() * 200 - 100 },
+      data: {
+        id: profile.id,
+        name: profile.name,
+        username: profile.username,
+        profile_photo_url: profile.profile_photo_url,
+        relation: 'family',
+        showDetails: !performanceMode.value
+      }
+    };
+    
+    elements.value = [...elements.value, newNode];
+    searchQuery.value = '';
+    showSearchResults.value = false;
+    searchResults.value = [];
+    emit('tree-updated');
+  } catch (error) {
+    console.error('Error adding search result to tree:', error);
+    alert('Failed to add profile to tree. Please try again.');
+  }
 };
 
 // Screenshot functionality
-const takeScreenshot = async () => {
+const takeScreenshot = async (): Promise<void> => {
   isTakingScreenshot.value = true;
   
   try {
@@ -531,68 +609,85 @@ const takeScreenshot = async () => {
     }
   } catch (error) {
     console.error('Screenshot error:', error);
+    alert('Failed to take screenshot. Please try again.');
   } finally {
     isTakingScreenshot.value = false;
   }
 };
 
 // Multi-selection functionality
-const handleSelectionChange = (event) => {
+const handleSelectionChange = (event: any): void => {
   selectedElements.value = event.elements || [];
 };
 
-const deleteSelectedElements = () => {
+const deleteSelectedElements = (): void => {
   if (confirm(`Are you sure you want to delete ${selectedElements.value.length} selected element(s)?`)) {
-    const selectedIds = selectedElements.value.map(el => el.id);
-    elements.value = elements.value.filter(el => !selectedIds.includes(el.id));
-    selectedElements.value = [];
+    try {
+      const selectedIds = selectedElements.value.map(el => el.id);
+      elements.value = elements.value.filter(el => !selectedIds.includes(el.id));
+      selectedElements.value = [];
+      emit('tree-updated');
+    } catch (error) {
+      console.error('Error deleting selected elements:', error);
+      alert('Failed to delete elements. Please try again.');
+    }
   }
 };
 
-const alignSelectedElements = () => {
+const alignSelectedElements = (): void => {
   if (selectedElements.value.length < 2) return;
   
-  const nodes = selectedElements.value.filter(el => el.type === 'familyNode');
-  if (nodes.length < 2) return;
-  
-  // Align horizontally (same Y position)
-  const avgY = nodes.reduce((sum, node) => sum + node.position.y, 0) / nodes.length;
-  
-  elements.value = elements.value.map(el => {
-    if (selectedElements.value.some(selected => selected.id === el.id)) {
-      return { ...el, position: { ...el.position, y: avgY } };
-    }
-    return el;
-  });
+  try {
+    const nodes = selectedElements.value.filter(el => el.type === 'familyNode') as TreeNode[];
+    if (nodes.length < 2) return;
+    
+    // Align horizontally (same Y position)
+    const avgY = nodes.reduce((sum, node) => sum + node.position.y, 0) / nodes.length;
+    
+    elements.value = elements.value.map(el => {
+      if (selectedElements.value.some(selected => selected.id === el.id)) {
+        return { ...el, position: { ...el.position, y: avgY } };
+      }
+      return el;
+    });
+  } catch (error) {
+    console.error('Error aligning elements:', error);
+    alert('Failed to align elements. Please try again.');
+  }
 };
 
-const clearSelection = () => {
+const clearSelection = (): void => {
   selectedElements.value = [];
 };
 
 // Layout algorithms
-const applyLayout = () => {
-  switch (currentLayout.value) {
-    case 'vertical':
-      applyVerticalLayout();
-      break;
-    case 'horizontal':
-      applyHorizontalLayout();
-      break;
-    case 'circular':
-      applyCircularLayout();
-      break;
-    case 'hierarchical':
-      applyHierarchicalLayout();
-      break;
-    default:
-      // Custom layout - do nothing
-      break;
+const applyLayout = (): void => {
+  try {
+    switch (currentLayout.value) {
+      case 'vertical':
+        applyVerticalLayout();
+        break;
+      case 'horizontal':
+        applyHorizontalLayout();
+        break;
+      case 'circular':
+        applyCircularLayout();
+        break;
+      case 'hierarchical':
+        applyHierarchicalLayout();
+        break;
+      default:
+        // Custom layout - do nothing
+        break;
+    }
+  } catch (error) {
+    console.error('Error applying layout:', error);
+    alert('Failed to apply layout. Please try again.');
   }
 };
 
-const applyVerticalLayout = () => {
-  const nodes = elements.value.filter(el => el.type === 'familyNode');
+const applyVerticalLayout = (): void => {
+  const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
   const centerNode = nodes.find(node => node.data.relation === 'self');
   
   if (!centerNode) return;
@@ -611,8 +706,8 @@ const applyVerticalLayout = () => {
   });
 };
 
-const applyHorizontalLayout = () => {
-  const nodes = elements.value.filter(el => el.type === 'familyNode');
+const applyHorizontalLayout = (): void => {
+  const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
   const centerNode = nodes.find(node => node.data.relation === 'self');
   
   if (!centerNode) return;
@@ -631,8 +726,8 @@ const applyHorizontalLayout = () => {
   });
 };
 
-const applyCircularLayout = () => {
-  const nodes = elements.value.filter(el => el.type === 'familyNode');
+const applyCircularLayout = (): void => {
+  const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
   const centerNode = nodes.find(node => node.data.relation === 'self');
   
   if (!centerNode) return;
@@ -652,14 +747,14 @@ const applyCircularLayout = () => {
   });
 };
 
-const applyHierarchicalLayout = () => {
-  const nodes = elements.value.filter(el => el.type === 'familyNode');
+const applyHierarchicalLayout = (): void => {
+  const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
   const centerNode = nodes.find(node => node.data.relation === 'self');
   
   if (!centerNode) return;
   
   // Group nodes by relation type
-  const relationGroups = {
+  const relationGroups: Record<string, TreeNode[]> = {
     'parent': [],
     'child': [],
     'spouse': [],
@@ -706,115 +801,142 @@ const applyHierarchicalLayout = () => {
 };
 
 // Vue Flow event handlers
-const handleConnect = (params) => {
-  // Validate connection
-  if (params.source === params.target) {
-    alert('Cannot connect a node to itself!');
-    return;
-  }
-  
-  // Check if connection already exists
-  const existingEdge = elements.value.find(el => 
-    el.type === 'default' && 
-    el.source === params.source && 
-    el.target === params.target
-  );
-  
-  if (existingEdge) {
-    alert('Connection already exists!');
-    return;
-  }
-  
-  const newEdge = {
-    id: `e${params.source}-${params.target}`,
-    source: params.source,
-    target: params.target,
-    type: 'default',
-    data: { relationship_type: 'family' }
-  };
-  elements.value = [...elements.value, newEdge];
-};
-
-const handleNodeDragStop = (event, node) => {
-  const updatedElements = elements.value.map(el => {
-    if (el.id === node.id) {
-      return { ...el, position: node.position };
+const handleConnect = (params: any): void => {
+  try {
+    // Validate connection
+    if (params.source === params.target) {
+      alert('Cannot connect a node to itself!');
+      return;
     }
-    return el;
-  });
-  elements.value = updatedElements;
+    
+    // Check if connection already exists
+    const existingEdge = elements.value.find(el => 
+      el.type === 'default' && 
+      (el as TreeEdge).source === params.source && 
+      (el as TreeEdge).target === params.target
+    );
+    
+    if (existingEdge) {
+      alert('Connection already exists!');
+      return;
+    }
+    
+    const newEdge: TreeEdge = {
+      id: `e${params.source}-${params.target}`,
+      source: params.source,
+      target: params.target,
+      type: 'default',
+      data: { relationship_type: 'family' }
+    };
+    elements.value = [...elements.value, newEdge];
+    emit('tree-updated');
+  } catch (error) {
+    console.error('Error handling connection:', error);
+    alert('Failed to create connection. Please try again.');
+  }
 };
 
-const handleNodeClick = (event, node) => {
-  selectedProfile.value = node.data;
-  showProfilePopup.value = true;
-};
-
-const handleNodeDoubleClick = (event, node) => {
-  // Enter edit mode for node
-  console.log('Edit node:', node);
-};
-
-const handleEdgeClick = (event, edge) => {
-  const newRelation = prompt('Enter relationship type:', edge.data.relationship_type || 'family');
-  if (newRelation) {
+const handleNodeDragStop = (event: any, node: TreeNode): void => {
+  try {
     const updatedElements = elements.value.map(el => {
-      if (el.id === edge.id) {
-        return { ...el, data: { ...el.data, relationship_type: newRelation } };
+      if (el.id === node.id) {
+        return { ...el, position: node.position };
       }
       return el;
     });
     elements.value = updatedElements;
+    emit('tree-updated');
+  } catch (error) {
+    console.error('Error handling node drag stop:', error);
   }
 };
 
-const handleEdgeDoubleClick = (event, edge) => {
+const handleNodeClick = (event: any, node: TreeNode): void => {
+  try {
+    selectedProfile.value = node.data;
+    showProfilePopup.value = true;
+  } catch (error) {
+    console.error('Error handling node click:', error);
+  }
+};
+
+const handleNodeDoubleClick = (event: any, node: TreeNode): void => {
+  // Enter edit mode for node
+  console.log('Edit node:', node);
+};
+
+const handleEdgeClick = (event: any, edge: TreeEdge): void => {
+  try {
+    const newRelation = prompt('Enter relationship type:', edge.data.relationship_type || 'family');
+    if (newRelation) {
+      const updatedElements = elements.value.map(el => {
+        if (el.id === edge.id) {
+          return { ...el, data: { ...el.data, relationship_type: newRelation } };
+        }
+        return el;
+      });
+      elements.value = updatedElements;
+      emit('tree-updated');
+    }
+  } catch (error) {
+    console.error('Error handling edge click:', error);
+    alert('Failed to update relationship. Please try again.');
+  }
+};
+
+const handleEdgeDoubleClick = (event: any, edge: TreeEdge): void => {
   // Enter edit mode for edge
   console.log('Edit edge:', edge);
 };
 
-const handlePaneClick = (event) => {
+const handlePaneClick = (): void => {
   // Clear selection on background click
   selectedElements.value = [];
   showSearchResults.value = false;
 };
 
 // Layout generation based on math.html example
-const generateLayout = () => {
+const generateLayout = (): void => {
   isGeneratingLayout.value = true;
   
   setTimeout(() => {
-    const nodes = elements.value.filter(el => el.type === 'familyNode');
-    const centerNode = nodes.find(node => node.data.relation === 'self');
-    
-    if (centerNode && nodes.length > 1) {
-      const updatedElements = elements.value.map(el => {
-        if (el.type === 'familyNode' && el.id !== centerNode.id) {
-          // Calculate position based on relation and available space
-          const angle = Math.random() * 2 * Math.PI;
-          const distance = 150 + Math.random() * 100;
-          const x = centerNode.position.x + Math.cos(angle) * distance;
-          const y = centerNode.position.y + Math.sin(angle) * distance;
-          
-          return { ...el, position: { x, y } };
-        }
-        return el;
-      });
+    try {
+      const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
+      const centerNode = nodes.find(node => node.data.relation === 'self');
       
-      elements.value = updatedElements;
+      if (centerNode && nodes.length > 1) {
+        const updatedElements = elements.value.map(el => {
+          if (el.type === 'familyNode' && el.id !== centerNode.id) {
+            // Calculate position based on relation and available space
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = 150 + Math.random() * 100;
+            const x = centerNode.position.x + Math.cos(angle) * distance;
+            const y = centerNode.position.y + Math.sin(angle) * distance;
+            
+            return { ...el, position: { x, y } };
+          }
+          return el;
+        });
+        
+        elements.value = updatedElements;
+        emit('tree-updated');
+      }
+    } catch (error) {
+      console.error('Error generating layout:', error);
+      alert('Failed to generate layout. Please try again.');
+    } finally {
+      isGeneratingLayout.value = false;
     }
-    
-    isGeneratingLayout.value = false;
   }, 500);
 };
 
 // Save tree functionality based on save.html example
-const saveTree = async () => {
+const saveTree = async (): Promise<void> => {
   isSaving.value = true;
   
   try {
-    const nodes = elements.value.filter(el => el.type === 'familyNode');
-    const edges = elements.value.filter(el => el.type === 'default');
+    const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
+    const edges = elements.value.filter(el => el.type === 'default') as TreeEdge[];
     
     const treeData = {
       nodes: nodes.map(node => ({
@@ -835,42 +957,52 @@ const saveTree = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
       },
       body: JSON.stringify(treeData)
     });
     
     if (response.ok) {
       console.log('Tree saved successfully');
+      alert('Family tree saved successfully!');
     } else {
       console.error('Failed to save tree');
+      throw new Error('Failed to save tree');
     }
   } catch (error) {
     console.error('Error saving tree:', error);
+    alert('Failed to save family tree. Please try again.');
   } finally {
     isSaving.value = false;
   }
 };
 
 // Keyboard shortcuts
-const handleKeyDown = (event) => {
-  if (event.key === 'Delete' && selectedElements.value.length > 0) {
-    deleteSelectedElements();
-  }
-  
-  if (event.ctrlKey && event.key === 'a') {
-    event.preventDefault();
-    selectedElements.value = elements.value;
-  }
-  
-  if (event.ctrlKey && event.key === 's') {
-    event.preventDefault();
-    saveTree();
+const handleKeyDown = (event: KeyboardEvent): void => {
+  try {
+    if (event.key === 'Delete' && selectedElements.value.length > 0) {
+      deleteSelectedElements();
+    }
+    
+    if (event.ctrlKey && event.key === 'a') {
+      event.preventDefault();
+      selectedElements.value = elements.value;
+    }
+    
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault();
+      saveTree();
+    }
+  } catch (error) {
+    console.error('Error handling keyboard shortcut:', error);
   }
 };
 
-onMounted(async () => {
+onMounted(async (): Promise<void> => {
   console.log('FamilyTree mounted with props:', props);
+  
+  // Verify API endpoints first
+  await initializeApiVerification(props.profileUserData.id);
   
   // Set initial builder mode
   isBuilderMode.value = props.isEditable;
@@ -883,7 +1015,7 @@ onMounted(async () => {
     const centerX = containerWidth / 2;
     const centerY = containerHeight / 2;
     
-    const centerNode = {
+    const centerNode: TreeNode = {
       id: props.profileUserData.id.toString(),
       type: 'familyNode',
       position: { x: centerX, y: centerY },
@@ -920,18 +1052,18 @@ onMounted(async () => {
 });
 
 // Cleanup
-onUnmounted(() => {
+onUnmounted((): void => {
   document.removeEventListener('keydown', handleKeyDown);
 });
 
 // Watch elements for changes
-watch(elements, (newElements) => {
+watch(elements, (): void => {
   // Auto-save functionality could be added here
 }, { deep: true });
 
 // Watch search query for debouncing
-let searchTimeout;
-watch(searchQuery, (newQuery) => {
+let searchTimeout: NodeJS.Timeout;
+watch(searchQuery, (newQuery: string): void => {
   clearTimeout(searchTimeout);
   if (newQuery.length >= 2) {
     searchTimeout = setTimeout(() => {

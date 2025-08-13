@@ -138,34 +138,41 @@
   </div>
 </template>
 
-<script setup>
-import { computed } from 'vue';
+<script setup lang="ts">
 import { Handle } from '@vue-flow/core';
 
-const props = defineProps({
-  node: {
-    type: Object,
-    required: true
-  },
-  isCenter: {
-    type: Boolean,
-    default: false
-  },
-  isBuilderMode: {
-    type: Boolean,
-    default: false
-  },
-  isSelected: {
-    type: Boolean,
-    default: false
-  }
-});
+interface NodeData {
+  id: number;
+  name: string;
+  username: string;
+  profile_photo_url?: string;
+  relation: string;
+  showDetails: boolean;
+}
 
-const emit = defineEmits(['click', 'edit', 'delete', 'start-connection']);
+interface Node {
+  id: string;
+  data: NodeData;
+  position: { x: number; y: number };
+}
+
+const props = defineProps<{
+  node: Node;
+  isCenter?: boolean;
+  isBuilderMode?: boolean;
+  isSelected?: boolean;
+}>();
+
+const emit = defineEmits<{
+  click: [node: Node];
+  edit: [node: Node];
+  delete: [nodeId: string];
+  'start-connection': [{ nodeId: string; direction: string; position: { x: number; y: number } }];
+}>();
 
 // Computed properties
-const getRelationBadgeClass = (relation) => {
-  const classes = {
+const getRelationBadgeClass = (relation: string): string => {
+  const classes: Record<string, string> = {
     'self': 'bg-blue-100 text-blue-800',
     'parent': 'bg-green-100 text-green-800',
     'child': 'bg-purple-100 text-purple-800',
@@ -200,8 +207,8 @@ const getRelationBadgeClass = (relation) => {
   return classes[relation] || 'bg-gray-100 text-gray-800';
 };
 
-const formatRelation = (relation) => {
-  const labels = {
+const formatRelation = (relation: string): string => {
+  const labels: Record<string, string> = {
     'self': 'You',
     'parent': 'Parent',
     'child': 'Child',
@@ -237,29 +244,14 @@ const formatRelation = (relation) => {
 };
 
 // Methods
-const handleNodeClick = () => {
-  emit('click', props.node);
-};
-
-const handleEdit = () => {
+const handleEdit = (): void => {
   emit('edit', props.node);
 };
 
-const handleDelete = () => {
+const handleDelete = (): void => {
   if (confirm(`Are you sure you want to remove ${props.node.data.name} from the family tree?`)) {
     emit('delete', props.node.id);
   }
-};
-
-const startConnection = (direction) => {
-  emit('start-connection', {
-    nodeId: props.node.id,
-    direction: direction,
-    position: {
-      x: props.node.x || 0,
-      y: props.node.y || 0
-    }
-  });
 };
 </script>
 

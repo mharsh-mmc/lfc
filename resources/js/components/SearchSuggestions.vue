@@ -37,45 +37,56 @@
   </div>
 </template>
 
-<script setup>
-import { ref, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
+<script setup lang="ts">
+import { watch, onUnmounted } from 'vue';
 
-const props = defineProps({
-  showSuggestions: {
-    type: Boolean,
-    default: false
-  },
-  suggestions: {
-    type: Array,
-    default: () => []
-  }
-});
+interface Suggestion {
+  id: number;
+  name: string;
+  location?: string;
+  profession?: string;
+  profile_photo_url?: string;
+}
 
-const emit = defineEmits(['select']);
+const props = defineProps<{
+  showSuggestions: boolean;
+  suggestions: Suggestion[];
+}>();
 
-const handleImageError = (event) => {
-  event.target.src = '/default-avatar.svg';
+const emit = defineEmits<{
+  select: [suggestion: Suggestion];
+  hide: [];
+}>();
+
+const handleImageError = (event: Event): void => {
+  const target = event.target as HTMLImageElement;
+  target.src = '/default-avatar.svg';
 };
 
-const selectSuggestion = (suggestion) => {
+const selectSuggestion = (suggestion: Suggestion): void => {
   emit('select', suggestion);
 };
 
 // Auto-hide suggestions when clicking outside
-const hideSuggestions = () => {
+const hideSuggestions = (): void => {
   emit('hide');
 };
 
 // Add click outside listener
-watch(() => props.showSuggestions, (show) => {
+watch(() => props.showSuggestions, (show: boolean) => {
   if (show) {
+    // Use nextTick to ensure DOM is updated
     setTimeout(() => {
       document.addEventListener('click', hideSuggestions);
     }, 100);
   } else {
     document.removeEventListener('click', hideSuggestions);
   }
+});
+
+// Cleanup event listener on component unmount
+onUnmounted((): void => {
+  document.removeEventListener('click', hideSuggestions);
 });
 </script>
 
