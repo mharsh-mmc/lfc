@@ -52,6 +52,12 @@ Route::prefix('profiles/{userId}/familytree')->group(function () {
         Route::post('/save', [App\Http\Controllers\Api\FamilyTreeController::class, 'saveFamilyTree']);
         Route::post('/generate-layouts', [App\Http\Controllers\Api\FamilyTreeController::class, 'generateLayouts']);
         
+        // Layout management routes
+        Route::post('/layout', [App\Http\Controllers\Api\FamilyTreeController::class, 'saveLayout']);
+        Route::get('/layout/custom', [App\Http\Controllers\Api\FamilyTreeController::class, 'getCustomLayout']);
+        Route::get('/layouts', [App\Http\Controllers\Api\FamilyTreeController::class, 'getLayouts']);
+        Route::delete('/layout/{layoutId}', [App\Http\Controllers\Api\FamilyTreeController::class, 'deleteLayout']);
+        
         Route::get('/search', [App\Http\Controllers\Api\FamilyTreeController::class, 'searchProfiles']);
         Route::post('/create-profile', [App\Http\Controllers\Api\FamilyTreeController::class, 'createProfileAndAdd']);
     });

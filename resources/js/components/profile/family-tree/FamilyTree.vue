@@ -414,7 +414,6 @@ const loadTreeData = async (): Promise<void> => {
     
     if (response.ok) {
       const treeData: TreeData = await response.json();
-      console.log('Loaded tree data:', treeData);
       
       // Convert backend data to VueFlow format
       const vueFlowNodes: TreeNode[] = treeData.nodes.map(node => ({
@@ -428,7 +427,6 @@ const loadTreeData = async (): Promise<void> => {
           profile_photo_url: node.profile?.profile_photo_path ? `/storage/${node.profile.profile_photo_path}` : undefined,
           relation: node.relation,
           showDetails: !performanceMode.value,
-          // Add additional profile data
           date_of_birth: node.profile?.date_of_birth,
           location: node.profile?.location,
           bio: node.profile?.bio,
@@ -444,15 +442,11 @@ const loadTreeData = async (): Promise<void> => {
       // Combine nodes and edges
       elements.value = [...vueFlowNodes, ...vueFlowEdges];
       hasLoadedTree.value = true;
-      
-      console.log('VueFlow elements set:', elements.value);
     } else {
-      console.error('Failed to load tree data:', response.status, response.statusText);
+      showErrorMessage('Failed to load family tree data. Please refresh the page and try again.');
     }
   } catch (error) {
-    console.error('Failed to load tree data:', error);
-    // Show user-friendly error message
-    alert('Failed to load family tree. Please refresh the page and try again.');
+    showErrorMessage('Failed to load family tree. Please check your connection and try again.');
   } finally {
     isLoading.value = false;
   }
@@ -964,7 +958,7 @@ const handleConnect = async (params: any): Promise<void> => {
   try {
     // Validate connection
     if (params.source === params.target) {
-      alert('Cannot connect a node to itself!');
+      showErrorMessage('Cannot connect a node to itself!');
       return;
     }
     
@@ -976,7 +970,7 @@ const handleConnect = async (params: any): Promise<void> => {
     );
     
     if (existingEdge) {
-      alert('Connection already exists!');
+      showErrorMessage('Connection already exists!');
       return;
     }
 
@@ -1010,7 +1004,6 @@ const handleConnect = async (params: any): Promise<void> => {
 
       if (response.ok) {
         const savedEdge = await response.json();
-        console.log('Edge saved successfully:', savedEdge);
         
         // Update the edge with backend data
         const updatedElements = elements.value.map(el => {
@@ -1035,14 +1028,12 @@ const handleConnect = async (params: any): Promise<void> => {
         throw new Error('Failed to save edge to backend');
       }
     } catch (error) {
-      console.error('Failed to save edge:', error);
-      alert('Failed to create connection. Please try again.');
+      showErrorMessage('Failed to create connection. Please try again.');
       // Remove the edge from local elements
       elements.value = elements.value.filter(el => el.id !== newEdge.id);
     }
   } catch (error) {
-    console.error('Error handling connection:', error);
-    alert('Failed to create connection. Please try again.');
+    showErrorMessage('Failed to create connection. Please try again.');
   }
 };
 
@@ -1282,7 +1273,7 @@ const generateLayout = (): void => {
   }, 500);
 };
 
-// Save tree functionality based on save.html example
+// Save tree functionality with layout saving
 const saveTree = async (): Promise<void> => {
   isSaving.value = true;
   
@@ -1290,21 +1281,25 @@ const saveTree = async (): Promise<void> => {
     const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
     const edges = elements.value.filter(el => el.type === 'default') as TreeEdge[];
     
+    // Prepare tree data for saving
     const treeData = {
       nodes: nodes.map(node => ({
+        id: node.id,
         profile_id: node.data.id,
         relation: node.data.relation,
         x_position: Math.round(node.position.x),
         y_position: Math.round(node.position.y)
       })),
       edges: edges.map(edge => ({
-        from_node_id: edge.source,
-        to_node_id: edge.target,
+        id: edge.id,
+        from_node_id: parseInt(edge.source),
+        to_node_id: parseInt(edge.target),
         relationship_type: edge.data.relationship_type || 'family',
         edge_type: 'bezier'
       }))
     };
     
+    // Save tree state
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/save`, {
       method: 'POST',
       headers: {
@@ -1315,18 +1310,125 @@ const saveTree = async (): Promise<void> => {
     });
     
     if (response.ok) {
-      console.log('Tree saved successfully');
-      alert('Family tree saved successfully!');
+      const result = await response.json();
+      
+      // Save current layout as custom layout
+      await saveCustomLayout();
+      
+      // Show success message with details
+      const successMessage = `Family tree saved successfully!\nNodes: ${result.nodes_count}\nEdges: ${result.edges_count}`;
+      showSuccessMessage(successMessage);
     } else {
-      console.error('Failed to save tree');
-      throw new Error('Failed to save tree');
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to save tree');
     }
   } catch (error) {
-    console.error('Error saving tree:', error);
-    alert('Failed to save family tree. Please try again.');
+    const errorMessage = error instanceof Error ? error.message : 'Failed to save family tree. Please try again.';
+    showErrorMessage(errorMessage);
   } finally {
     isSaving.value = false;
   }
+};
+
+// Save custom layout
+const saveCustomLayout = async (): Promise<void> => {
+  try {
+    const nodes = elements.value.filter(el => el.type === 'familyNode') as TreeNode[];
+    
+    const layoutData = {
+      nodes: nodes.map(node => ({
+        id: node.id,
+        x: node.position.x,
+        y: node.position.y
+      })),
+      timestamp: new Date().toISOString()
+    };
+    
+    const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/layout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify({
+        name: 'Custom Layout',
+        type: 'custom',
+        layout_data: layoutData
+      })
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to save custom layout');
+    }
+  } catch (error) {
+    console.warn('Error saving custom layout:', error);
+  }
+};
+
+// Load custom layout
+const loadCustomLayout = async (): Promise<void> => {
+  try {
+    const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/layout/custom`, {
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      }
+    });
+    
+    if (response.ok) {
+      const layout = await response.json();
+      if (layout.layout_data && layout.layout_data.nodes) {
+        applyLayoutToNodes(layout.layout_data.nodes);
+      }
+    }
+  } catch (error) {
+    console.warn('Error loading custom layout:', error);
+  }
+};
+
+// Apply layout to nodes
+const applyLayoutToNodes = (layoutNodes: Array<{id: string, x: number, y: number}>): void => {
+  elements.value = elements.value.map(el => {
+    if (el.type === 'familyNode') {
+      const layoutNode = layoutNodes.find(n => n.id === el.id);
+      if (layoutNode) {
+        return {
+          ...el,
+          position: { x: layoutNode.x, y: layoutNode.y }
+        };
+      }
+    }
+    return el;
+  });
+};
+
+// Success message handler
+const showSuccessMessage = (message: string): void => {
+  // Create a temporary success notification
+  const notification = document.createElement('div');
+  notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      document.body.removeChild(notification);
+    }
+  }, 3000);
+};
+
+// Error message handler
+const showErrorMessage = (message: string): void => {
+  // Create a temporary error notification
+  const notification = document.createElement('div');
+  notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      document.body.removeChild(notification);
+    }
+  }, 5000);
 };
 
 // Keyboard shortcuts
@@ -1351,19 +1453,14 @@ const handleKeyDown = (event: KeyboardEvent): void => {
 };
 
 onMounted(async (): Promise<void> => {
-  console.log('FamilyTree mounted with props:', props);
-  
-  // Verify API endpoints first
-  await initializeApiVerification(props.profileUserData.id);
-  
   // Set initial builder mode
   isBuilderMode.value = props.isEditable;
   
   // Create center node with improved positioning
   if (props.profileUserData && props.profileUserData.id) {
     // Calculate center position based on container size
-    const containerWidth = 800; // Approximate container width
-    const containerHeight = 600; // Approximate container height
+    const containerWidth = 800;
+    const containerHeight = 600;
     const centerX = containerWidth / 2;
     const centerY = containerHeight / 2;
     
@@ -1378,7 +1475,6 @@ onMounted(async (): Promise<void> => {
         profile_photo_url: props.profileUserData.profile_photo_url,
         relation: 'self',
         showDetails: !performanceMode.value,
-        // Add additional profile data
         date_of_birth: props.profileUserData.date_of_birth,
         location: props.profileUserData.location,
         bio: props.profileUserData.bio,
@@ -1389,15 +1485,14 @@ onMounted(async (): Promise<void> => {
       }
     };
     
-    console.log('Creating center node:', centerNode);
     elements.value = [centerNode];
-    console.log('Elements after center node creation:', elements.value);
-  } else {
-    console.error('No profile user data available:', props.profileUserData);
   }
   
   // Load existing tree data
   await loadTreeData();
+  
+  // Try to load custom layout if available
+  await loadCustomLayout();
   
   // Add keyboard event listener
   document.addEventListener('keydown', handleKeyDown);
