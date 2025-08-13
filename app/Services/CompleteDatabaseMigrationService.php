@@ -395,12 +395,8 @@ class CompleteDatabaseMigrationService
                         'status' => 'created'
                     ];
                     
-                    // Update user's education fields
-                    $newUser->update([
-                        'university' => null,
-                        'field_of_study' => null,
-                        'education_period' => null
-                    ]);
+                    // DO NOT UPDATE existing user data - preserve original data
+                    // The education data is stored in the separate education table
                 }
                 
             } catch (Exception $e) {
