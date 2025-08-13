@@ -33,7 +33,7 @@ class CompleteDatabaseMigrationService
     public function migrateCompleteDatabase()
     {
         try {
-            Log::info("Starting complete database migration");
+            Log::info("Starting complete database migration: ALL tables included");
             
             $migrationResults = [];
             
@@ -68,7 +68,7 @@ class CompleteDatabaseMigrationService
             
             return [
                 'success' => true,
-                'message' => 'Complete database migration successful',
+                'message' => 'Complete database migration successful (ALL tables included)',
                 'results' => $migrationResults,
                 'summary' => $this->generateMigrationSummary($migrationResults)
             ];
@@ -93,7 +93,7 @@ class CompleteDatabaseMigrationService
                 $existingUser = User::where('email', $oldUser->mail)->first();
                 
                 if (!$existingUser) {
-                    // Create new user
+                    // Create new user with ALL data
                     $newUser = User::create([
                         'name' => trim($oldUser->nome . ' ' . $oldUser->cognome),
                         'email' => $oldUser->mail ?: 'user_' . $oldUser->id . '@migrated.com',
@@ -123,9 +123,9 @@ class CompleteDatabaseMigrationService
                         'profile_picture_url' => null,
                         'custom_data' => [
                             'old_id' => $oldUser->id,
-                            'old_data' => $oldUser,
                             'migrated_from' => 'anagrafica',
                             'migration_date' => now()->toISOString(),
+                            // Store ALL original data
                             'original_fields' => [
                                 'nome' => $oldUser->nome,
                                 'cognome' => $oldUser->cognome,
@@ -136,6 +136,7 @@ class CompleteDatabaseMigrationService
                                 'cittanascita' => $oldUser->cittanascita,
                                 'provincianascita' => $oldUser->provincianascita,
                                 'nazionenascita' => $oldUser->nazionenascita,
+                                'mail' => $oldUser->mail,
                                 'tel' => $oldUser->tel,
                                 'cittaresidenza' => $oldUser->cittaresidenza,
                                 'provinciaresidenza' => $oldUser->provinciaresidenza,
@@ -381,7 +382,8 @@ class CompleteDatabaseMigrationService
                         'custom_data' => [
                             'old_user_id' => $user->id,
                             'migrated_from' => 'anagrafica',
-                            'migration_date' => now()->toISOString()
+                            'migration_date' => now()->toISOString(),
+                            'original_degree' => $user->titolodistudio
                         ]
                     ]);
                     
@@ -442,7 +444,11 @@ class CompleteDatabaseMigrationService
                         'custom_data' => [
                             'old_user_id' => $user->id,
                             'migrated_from' => 'anagrafica',
-                            'migration_date' => now()->toISOString()
+                            'migration_date' => now()->toISOString(),
+                            'original_data' => [
+                                'datamorte' => $user->datamorte,
+                                'causa_decesso' => $user->causa_decesso
+                            ]
                         ]
                     ]);
                     
@@ -622,7 +628,11 @@ class CompleteDatabaseMigrationService
             // Check if it's an old system table
             if (str_contains($tableName, 'genealogical') || 
                 str_contains($tableName, 'anagrafica') ||
-                str_contains($tableName, 'citta')) {
+                str_contains($tableName, 'citta') ||
+                str_contains($tableName, 'user') ||
+                str_contains($tableName, 'profile') ||
+                str_contains($tableName, 'media') ||
+                str_contains($tableName, 'education')) {
                 
                 $recordCount = DB::table($tableName)->count();
                 $additionalTables[] = [
@@ -651,7 +661,8 @@ class CompleteDatabaseMigrationService
             'total_cities' => count($results['cities']),
             'total_additional_tables' => count($results['additional_tables']),
             'migration_date' => now()->toISOString(),
-            'status' => 'completed'
+            'status' => 'completed',
+            'note' => 'Complete database migration (ALL tables included)'
         ];
         
         return $summary;

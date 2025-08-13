@@ -114,7 +114,7 @@
 
             <!-- Migration Buttons -->
             <div class="flex flex-wrap gap-4">
-                <button id="migrate-core-data" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors font-medium">
+                <button id="migrate-complete-database" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors font-medium">
                     🚀 Migrate Complete Database (ALL Tables)
                 </button>
                 <button id="refresh-status" class="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-medium">
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Migrate complete database
-    document.getElementById('migrate-core-data')?.addEventListener('click', function() {
+    document.getElementById('migrate-complete-database')?.addEventListener('click', function() {
         migrateCompleteDatabase();
     });
 
@@ -252,7 +252,7 @@ async function migrateCompleteDatabase() {
     try {
         showLoading('Migrating complete database (ALL tables)...');
         
-        const response = await fetch('{{ route("migration.migrate-core") }}', {
+        const response = await fetch('{{ route("migration.migrate-complete") }}', {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
