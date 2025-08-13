@@ -134,6 +134,7 @@ Route::middleware([
 Route::prefix('migration')->group(function () {
     Route::get('/', [App\Http\Controllers\MigrationController::class, 'index'])->name('migration.dashboard');
     Route::post('/import-old-database', [App\Http\Controllers\MigrationController::class, 'importOldDatabase'])->name('migration.import-old');
+    Route::post('/migrate-core-data', [App\Http\Controllers\MigrationController::class, 'migrateCoreData'])->name('migration.migrate-core');
     Route::post('/migrate-tree/{treeId}', [App\Http\Controllers\MigrationController::class, 'migrateTree'])->name('migration.migrate-tree');
     Route::post('/migrate-all-trees', [App\Http\Controllers\MigrationController::class, 'migrateAllTrees'])->name('migration.migrate-all');
     Route::get('/status', [App\Http\Controllers\MigrationController::class, 'getStatus'])->name('migration.status');

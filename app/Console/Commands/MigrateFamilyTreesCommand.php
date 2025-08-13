@@ -3,26 +3,26 @@
 namespace App\Console\Commands;
 
 use App\Services\OldDatabaseImportService;
-use App\Services\CompleteDatabaseMigrationService;
+use App\Services\FocusedMigrationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MigrateFamilyTreesCommand extends Command
 {
-    protected $signature = 'family-tree:migrate {tree_id?} {--all : Migrate all trees} {--complete : Migrate complete database} {--import-old : Import old database structure first}';
+    protected $signature = 'family-tree:migrate {tree_id?} {--all : Migrate all trees} {--core : Migrate core data only (Users + Family Trees)} {--import-old : Import old database structure first}';
     protected $description = 'Migrate old family trees to new VueFlow system';
     
     protected $oldDatabaseImport;
-    protected $completeMigrationService;
+    protected $focusedMigrationService;
     
     public function __construct(
         OldDatabaseImportService $oldDatabaseImport,
-        CompleteDatabaseMigrationService $completeMigrationService
+        FocusedMigrationService $focusedMigrationService
     ) {
         parent::__construct();
         $this->oldDatabaseImport = $oldDatabaseImport;
-        $this->completeMigrationService = $completeMigrationService;
+        $this->focusedMigrationService = $focusedMigrationService;
     }
     
     public function handle()
@@ -44,9 +44,9 @@ class MigrateFamilyTreesCommand extends Command
         // Show old database stats
         $this->showOldDatabaseStats();
         
-        if ($this->option('complete')) {
-            // Complete database migration
-            $this->migrateCompleteDatabase();
+        if ($this->option('core')) {
+            // Core data migration (Users + Family Trees only)
+            $this->migrateCoreData();
         } elseif ($treeId = $this->argument('tree_id')) {
             // Migrate specific tree
             $this->migrateSingleTree($treeId);
@@ -55,12 +55,12 @@ class MigrateFamilyTreesCommand extends Command
             $this->migrateAllTrees();
         } else {
             $this->error('❌ Please specify migration type:');
-            $this->info('  --complete : Migrate complete database (recommended)');
+            $this->info('  --core : Migrate core data only (Users + Family Trees) - RECOMMENDED');
             $this->info('  --all : Migrate all family trees only');
             $this->info('  {tree_id} : Migrate specific tree');
             $this->info('');
             $this->info('Usage examples:');
-            $this->info('  php artisan family-tree:migrate --complete --import-old');
+            $this->info('  php artisan family-tree:migrate --core --import-old');
             $this->info('  php artisan family-tree:migrate --all');
             $this->info('  php artisan family-tree:migrate 1');
             return 1;
@@ -102,50 +102,51 @@ class MigrateFamilyTreesCommand extends Command
     }
     
     /**
-     * Complete database migration
+     * Core data migration (Users + Family Trees only)
      */
-    private function migrateCompleteDatabase()
+    private function migrateCoreData()
     {
         try {
-            $this->info('🚀 Starting complete database migration...');
-            $this->info('This will migrate ALL tables: users, family trees, education, media, etc.');
+            $this->info('🎯 Starting core data migration...');
+            $this->info('This will migrate ONLY:');
+            $this->info('  ✅ Users (anagrafica → users)');
+            $this->info('  ✅ Family Trees (with nodes and edges)');
+            $this->info('  ❌ NO extra metadata tables');
+            $this->info('  ❌ NO education/media/deceased profiles');
             
-            if (!$this->confirm('Are you sure you want to migrate the complete database?')) {
+            if (!$this->confirm('Proceed with core data migration?')) {
                 $this->info('Migration cancelled.');
                 return;
             }
             
-            $result = $this->completeMigrationService->migrateCompleteDatabase();
+            $result = $this->focusedMigrationService->migrateCoreData();
             
-            $this->info('🎉 Complete database migration successful!');
-            $this->showCompleteMigrationResults($result);
+            $this->info('🎉 Core data migration successful!');
+            $this->showCoreMigrationResults($result);
             
         } catch (\Exception $e) {
-            $this->error("❌ Complete database migration failed: " . $e->getMessage());
-            Log::error("Complete database migration failed: " . $e->getMessage());
+            $this->error("❌ Core data migration failed: " . $e->getMessage());
+            Log::error("Core data migration failed: " . $e->getMessage());
         }
     }
     
     /**
-     * Show complete migration results
+     * Show core migration results
      */
-    private function showCompleteMigrationResults($result)
+    private function showCoreMigrationResults($result)
     {
         $summary = $result['summary'];
         
         $this->info('📊 Migration Summary:');
         $this->info("   - Users Migrated: {$summary['total_users_migrated']}");
         $this->info("   - Family Trees: {$summary['total_family_trees_migrated']}");
-        $this->info("   - Education Records: {$summary['total_education_records']}");
-        $this->info("   - Deceased Profiles: {$summary['total_deceased_profiles']}");
-        $this->info("   - Media Files: {$summary['total_media_files']}");
-        $this->info("   - Cities: {$summary['total_cities']}");
-        $this->info("   - Additional Tables: {$summary['total_additional_tables']}");
         $this->info("   - Migration Date: {$summary['migration_date']}");
+        $this->info("   - Note: {$summary['note']}");
         
         $this->info('');
-        $this->info('✅ All data has been successfully migrated to your new database!');
+        $this->info('✅ Core data has been successfully migrated!');
         $this->info('🌐 Your VueFlow family trees are now ready to use.');
+        $this->info('👥 All users are now available in your new system.');
     }
     
     /**
@@ -156,12 +157,11 @@ class MigrateFamilyTreesCommand extends Command
         try {
             $this->info("🔄 Migrating tree ID: {$treeId}");
             
-            // For single tree migration, we'll use the complete service
-            // but only for that specific tree
-            $this->warn('⚠️  Single tree migration is deprecated. Use --complete for full migration.');
-            $this->info('Starting complete migration...');
+            // For single tree migration, we'll use the focused service
+            $this->warn('⚠️  Single tree migration is deprecated. Use --core for full migration.');
+            $this->info('Starting core migration...');
             
-            $this->migrateCompleteDatabase();
+            $this->migrateCoreData();
             
         } catch (\Exception $e) {
             $this->error("❌ Failed to migrate tree {$treeId}: " . $e->getMessage());
@@ -177,11 +177,11 @@ class MigrateFamilyTreesCommand extends Command
         try {
             $this->info("🔄 Migrating all family trees...");
             
-            // For all trees migration, we'll use the complete service
-            $this->warn('⚠️  All trees migration is deprecated. Use --complete for full migration.');
-            $this->info('Starting complete migration...');
+            // For all trees migration, we'll use the focused service
+            $this->warn('⚠️  All trees migration is deprecated. Use --core for full migration.');
+            $this->info('Starting core migration...');
             
-            $this->migrateCompleteDatabase();
+            $this->migrateCoreData();
             
         } catch (\Exception $e) {
             $this->error("❌ Failed to migrate all trees: " . $e->getMessage());

@@ -7,6 +7,10 @@
         <div class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-900 mb-4">🌳 Family Tree Migration Dashboard</h1>
             <p class="text-lg text-gray-600">Transform your old family tree data to the new VueFlow system</p>
+            <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                <p class="text-blue-800 font-medium">🎯 Focused Migration: Users + Family Trees Only</p>
+                <p class="text-blue-600 text-sm">No extra metadata tables - just the essential data you need</p>
+            </div>
         </div>
 
         <!-- Status Cards -->
@@ -74,6 +78,26 @@
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">🔄 Migration Actions</h2>
             
+            <!-- What Gets Migrated -->
+            <div class="mb-6 p-4 bg-green-50 rounded-lg">
+                <h3 class="text-lg font-medium text-green-800 mb-2">✅ What Will Be Migrated:</h3>
+                <ul class="text-green-700 space-y-1">
+                    <li>• <strong>Users:</strong> All people from anagrafica table → users table</li>
+                    <li>• <strong>Family Trees:</strong> All active trees with nodes and relationships</li>
+                    <li>• <strong>VueFlow Data:</strong> Position-based → coordinate-based layouts</li>
+                </ul>
+            </div>
+            
+            <!-- What Won't Be Migrated -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-800 mb-2">❌ What Won't Be Migrated:</h3>
+                <ul class="text-gray-600 space-y-1">
+                    <li>• Education records, media files, deceased profiles</li>
+                    <li>• Extra metadata tables and system configurations</li>
+                    <li>• Website settings and non-essential data</li>
+                </ul>
+            </div>
+
             <!-- Available Trees -->
             <div class="mb-6">
                 <h3 class="text-lg font-medium text-gray-700 mb-3">Available Trees for Migration</h3>
@@ -84,8 +108,8 @@
 
             <!-- Migration Buttons -->
             <div class="flex flex-wrap gap-4">
-                <button id="migrate-all-trees" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors font-medium">
-                    🚀 Migrate All Trees
+                <button id="migrate-core-data" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors font-medium">
+                    🚀 Migrate Core Data (Users + Family Trees)
                 </button>
                 <button id="refresh-status" class="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-medium">
                     🔄 Refresh Status
@@ -130,9 +154,9 @@ document.addEventListener('DOMContentLoaded', function() {
         importOldDatabase();
     });
 
-    // Migrate all trees
-    document.getElementById('migrate-all-trees')?.addEventListener('click', function() {
-        migrateAllTrees();
+    // Migrate core data
+    document.getElementById('migrate-core-data')?.addEventListener('click', function() {
+        migrateCoreData();
     });
 
     // Refresh status
@@ -204,9 +228,7 @@ async function loadAvailableTrees() {
                         <span class="font-medium">${tree.title}</span>
                         <span class="text-sm text-gray-500 ml-2">(ID: ${tree.id})</span>
                     </div>
-                    <button onclick="migrateSingleTree(${tree.id})" class="bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors text-sm">
-                        Migrate
-                    </button>
+                    <span class="text-sm text-green-600">Will be migrated with core data</span>
                 `;
                 treesContainer.appendChild(treeElement);
             });
@@ -216,42 +238,15 @@ async function loadAvailableTrees() {
     }
 }
 
-async function migrateSingleTree(treeId) {
-    try {
-        showLoading(`Migrating tree ${treeId}...`);
-        
-        const response = await fetch(`{{ route("migration.migrate-tree", ":treeId") }}`.replace(':treeId', treeId), {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Content-Type': 'application/json',
-            }
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`Successfully migrated tree ${treeId}!`, 'success');
-            showMigrationResults([result.data]);
-        } else {
-            showNotification(result.message, 'error');
-        }
-    } catch (error) {
-        showNotification('Failed to migrate tree: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function migrateAllTrees() {
-    if (!confirm('Are you sure you want to migrate all trees? This may take some time.')) {
+async function migrateCoreData() {
+    if (!confirm('Are you sure you want to migrate core data (Users + Family Trees)? This will create all users and family trees in your new system.')) {
         return;
     }
 
     try {
-        showLoading('Migrating all trees...');
+        showLoading('Migrating core data (Users + Family Trees)...');
         
-        const response = await fetch('{{ route("migration.migrate-all") }}', {
+        const response = await fetch('{{ route("migration.migrate-core") }}', {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -263,12 +258,16 @@ async function migrateAllTrees() {
         
         if (result.success) {
             showNotification(result.message, 'success');
-            showMigrationResults(result.data.results);
+            showMigrationResults([{
+                status: 'success',
+                message: result.message,
+                data: result.data
+            }]);
         } else {
             showNotification(result.message, 'error');
         }
     } catch (error) {
-        showNotification('Failed to migrate all trees: ' + error.message, 'error');
+        showNotification('Failed to migrate core data: ' + error.message, 'error');
     } finally {
         hideLoading();
     }
@@ -282,33 +281,30 @@ function showMigrationResults(results) {
     
     results.forEach(result => {
         const resultElement = document.createElement('div');
-        resultElement.className = 'p-4 border rounded-md mb-3';
+        resultElement.className = 'p-4 border rounded-md mb-3 border-green-200 bg-green-50';
         
         if (result.status === 'success') {
-            resultElement.className += ' border-green-200 bg-green-50';
             resultElement.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <div>
-                        <span class="font-medium text-green-800">Tree ${result.old_tree_id} → ${result.new_tree_id}</span>
-                        <span class="text-sm text-green-600 ml-2">✅ Success</span>
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        <span class="text-green-600 text-2xl mr-2">✅</span>
+                        <span class="font-medium text-green-800">Core Data Migration Successful!</span>
                     </div>
+                    <p class="text-green-700">${result.message}</p>
                     <div class="text-sm text-green-600">
-                        ${result.nodes_count} nodes, ${result.edges_count} edges
+                        <p>• Users migrated: ${result.data.users_migrated}</p>
+                        <p>• Family trees migrated: ${result.data.family_trees_migrated}</p>
                     </div>
                 </div>
             `;
         } else {
-            resultElement.className += ' border-red-200 bg-red-50';
+            resultElement.className = 'p-4 border rounded-md mb-3 border-red-200 bg-red-50';
             resultElement.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <div>
-                        <span class="font-medium text-red-800">Tree ${result.old_tree_id}</span>
-                        <span class="text-sm text-red-600 ml-2">❌ Failed</span>
-                    </div>
-                    <div class="text-sm text-red-600">
-                        ${result.error}
-                    </div>
+                <div class="flex items-center">
+                    <span class="text-red-600 text-2xl mr-2">❌</span>
+                    <span class="font-medium text-red-800">Migration Failed</span>
                 </div>
+                <p class="text-red-700 mt-2">${result.message}</p>
             `;
         }
         
