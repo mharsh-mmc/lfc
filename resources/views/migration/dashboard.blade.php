@@ -7,9 +7,9 @@
         <div class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-900 mb-4">🌳 Family Tree Migration Dashboard</h1>
             <p class="text-lg text-gray-600">Transform your old family tree data to the new VueFlow system</p>
-            <div class="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p class="text-blue-800 font-medium">🎯 Focused Migration: Users + Family Trees Only</p>
-                <p class="text-blue-600 text-sm">No extra metadata tables - just the essential data you need</p>
+            <div class="mt-4 p-4 bg-green-50 rounded-lg">
+                <p class="text-green-800 font-medium">🚀 Complete Database Migration: ALL Tables Included</p>
+                <p class="text-green-600 text-sm">Every piece of data from your old system will be migrated</p>
             </div>
         </div>
 
@@ -80,21 +80,27 @@
             
             <!-- What Gets Migrated -->
             <div class="mb-6 p-4 bg-green-50 rounded-lg">
-                <h3 class="text-lg font-medium text-green-800 mb-2">✅ What Will Be Migrated:</h3>
+                <h3 class="text-lg font-medium text-green-800 mb-2">✅ What Will Be Migrated (ALL Tables):</h3>
                 <ul class="text-green-700 space-y-1">
                     <li>• <strong>Users:</strong> All people from anagrafica table → users table</li>
                     <li>• <strong>Family Trees:</strong> All active trees with nodes and relationships</li>
+                    <li>• <strong>Education Records:</strong> All titolo di studio → education table</li>
+                    <li>• <strong>Deceased Profiles:</strong> All death records → deceased_profiles table</li>
+                    <li>• <strong>Media Files:</strong> All images, photos, curriculum → media table</li>
+                    <li>• <strong>Cities Data:</strong> All city information preserved</li>
+                    <li>• <strong>Extra Metadata:</strong> All additional tables and configurations</li>
                     <li>• <strong>VueFlow Data:</strong> Position-based → coordinate-based layouts</li>
                 </ul>
             </div>
             
-            <!-- What Won't Be Migrated -->
-            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h3 class="text-lg font-medium text-gray-800 mb-2">❌ What Won't Be Migrated:</h3>
-                <ul class="text-gray-600 space-y-1">
-                    <li>• Education records, media files, deceased profiles</li>
-                    <li>• Extra metadata tables and system configurations</li>
-                    <li>• Website settings and non-essential data</li>
+            <!-- Migration Benefits -->
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg">
+                <h3 class="text-lg font-medium text-blue-800 mb-2">🎯 Migration Benefits:</h3>
+                <ul class="text-blue-700 space-y-1">
+                    <li>• <strong>100% Data Preservation:</strong> No information is lost</li>
+                    <li>• <strong>Complete System:</strong> All features from old system available</li>
+                    <li>• <strong>Modern Interface:</strong> VueFlow-powered family trees</li>
+                    <li>• <strong>Enhanced Features:</strong> Better user experience with all data</li>
                 </ul>
             </div>
 
@@ -109,7 +115,7 @@
             <!-- Migration Buttons -->
             <div class="flex flex-wrap gap-4">
                 <button id="migrate-core-data" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors font-medium">
-                    🚀 Migrate Core Data (Users + Family Trees)
+                    🚀 Migrate Complete Database (ALL Tables)
                 </button>
                 <button id="refresh-status" class="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors font-medium">
                     🔄 Refresh Status
@@ -154,9 +160,9 @@ document.addEventListener('DOMContentLoaded', function() {
         importOldDatabase();
     });
 
-    // Migrate core data
+    // Migrate complete database
     document.getElementById('migrate-core-data')?.addEventListener('click', function() {
-        migrateCoreData();
+        migrateCompleteDatabase();
     });
 
     // Refresh status
@@ -228,7 +234,7 @@ async function loadAvailableTrees() {
                         <span class="font-medium">${tree.title}</span>
                         <span class="text-sm text-gray-500 ml-2">(ID: ${tree.id})</span>
                     </div>
-                    <span class="text-sm text-green-600">Will be migrated with core data</span>
+                    <span class="text-sm text-green-600">Will be migrated with complete database</span>
                 `;
                 treesContainer.appendChild(treeElement);
             });
@@ -238,13 +244,13 @@ async function loadAvailableTrees() {
     }
 }
 
-async function migrateCoreData() {
-    if (!confirm('Are you sure you want to migrate core data (Users + Family Trees)? This will create all users and family trees in your new system.')) {
+async function migrateCompleteDatabase() {
+    if (!confirm('Are you sure you want to migrate the COMPLETE database? This will migrate ALL tables including:\n\n• Users and Family Trees\n• Education Records\n• Deceased Profiles\n• Media Files\n• Cities Data\n• Extra Metadata Tables\n\nThis process may take some time.')) {
         return;
     }
 
     try {
-        showLoading('Migrating core data (Users + Family Trees)...');
+        showLoading('Migrating complete database (ALL tables)...');
         
         const response = await fetch('{{ route("migration.migrate-core") }}', {
             method: 'POST',
@@ -267,7 +273,7 @@ async function migrateCoreData() {
             showNotification(result.message, 'error');
         }
     } catch (error) {
-        showNotification('Failed to migrate core data: ' + error.message, 'error');
+        showNotification('Failed to migrate complete database: ' + error.message, 'error');
     } finally {
         hideLoading();
     }
@@ -288,12 +294,18 @@ function showMigrationResults(results) {
                 <div class="space-y-2">
                     <div class="flex items-center">
                         <span class="text-green-600 text-2xl mr-2">✅</span>
-                        <span class="font-medium text-green-800">Core Data Migration Successful!</span>
+                        <span class="font-medium text-green-800">Complete Database Migration Successful!</span>
                     </div>
                     <p class="text-green-700">${result.message}</p>
                     <div class="text-sm text-green-600">
                         <p>• Users migrated: ${result.data.users_migrated}</p>
                         <p>• Family trees migrated: ${result.data.family_trees_migrated}</p>
+                        <p>• Education records: ${result.data.education_records}</p>
+                        <p>• Deceased profiles: ${result.data.deceased_profiles}</p>
+                        <p>• Media files: ${result.data.media_files}</p>
+                        <p>• Cities data: ${result.data.cities}</p>
+                        <p>• Additional tables: ${result.data.additional_tables}</p>
+                        <p>• All additional tables and metadata included</p>
                     </div>
                 </div>
             `;

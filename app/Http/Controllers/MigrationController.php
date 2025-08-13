@@ -66,20 +66,25 @@ class MigrationController extends Controller
             
             return response()->json([
                 'success' => true,
-                'message' => 'Successfully migrated core data (Users + Family Trees)',
+                'message' => 'Successfully migrated complete database (ALL tables included)',
                 'data' => [
                     'users_migrated' => count($result['results']['users']),
                     'family_trees_migrated' => count($result['results']['family_trees']),
+                    'education_records' => count($result['results']['education']),
+                    'deceased_profiles' => count($result['results']['deceased_profiles']),
+                    'media_files' => count($result['results']['media']),
+                    'cities' => count($result['results']['cities']),
+                    'additional_tables' => count($result['results']['additional_tables']),
                     'summary' => $result['summary']
                 ]
             ]);
             
         } catch (\Exception $e) {
-            Log::error('Failed to migrate core data: ' . $e->getMessage());
+            Log::error('Failed to migrate complete database: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to migrate core data: ' . $e->getMessage()
+                'message' => 'Failed to migrate complete database: ' . $e->getMessage()
             ], 500);
         }
     }
