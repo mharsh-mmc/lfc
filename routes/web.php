@@ -130,6 +130,15 @@ Route::middleware([
     })->name('test-notifications');
 });
 
+// Migration Routes
+Route::prefix('migration')->group(function () {
+    Route::get('/', [App\Http\Controllers\MigrationController::class, 'index'])->name('migration.dashboard');
+    Route::post('/import-old-database', [App\Http\Controllers\MigrationController::class, 'importOldDatabase'])->name('migration.import-old');
+    Route::post('/migrate-tree/{treeId}', [App\Http\Controllers\MigrationController::class, 'migrateTree'])->name('migration.migrate-tree');
+    Route::post('/migrate-all-trees', [App\Http\Controllers\MigrationController::class, 'migrateAllTrees'])->name('migration.migrate-all');
+    Route::get('/status', [App\Http\Controllers\MigrationController::class, 'getStatus'])->name('migration.status');
+    Route::get('/available-trees', [App\Http\Controllers\MigrationController::class, 'getAvailableTrees'])->name('migration.available-trees');
+});
 
 
 // Profile banner route
