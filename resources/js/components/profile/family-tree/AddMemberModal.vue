@@ -328,10 +328,8 @@ const handlePhotoChange = (event: Event): void => {
 };
 
 const handleSubmit = async (): Promise<void> => {
-  console.log('Form submission started');
   if (!form.name.trim()) return;
   
-  console.log('Form data:', form);
   isSubmitting.value = true;
   
   try {
@@ -366,21 +364,21 @@ const handleSubmit = async (): Promise<void> => {
       formData.append('calling', form.calling.trim());
     }
     
-    // Position for the tree node
-    formData.append('x_position', Math.floor(Math.random() * 400 - 200).toString());
-    formData.append('y_position', Math.floor(Math.random() * 400 - 200).toString());
+    // Calculate position relative to center node (will be calculated in the parent component)
+    const randomX = Math.floor(Math.random() * 400 - 200);
+    const randomY = Math.floor(Math.random() * 400 - 200);
+    formData.append('x_position', randomX.toString());
+    formData.append('y_position', randomY.toString());
     
     // Profile photo if selected
     if (profilePhotoFile.value) {
       formData.append('profile_photo', profilePhotoFile.value);
     }
 
-    console.log('FormData created, sending request to API');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     if (!csrfToken) {
       throw new Error('CSRF token not found');
     }
-    console.log('CSRF Token:', csrfToken);
 
     // Create profile and add to tree
     const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/create-profile`, {
@@ -391,35 +389,59 @@ const handleSubmit = async (): Promise<void> => {
       body: formData
     });
 
-    console.log('Response received:', response);
-    console.log('Response status:', response.status);
-
     if (response.ok) {
       const newProfile: CreatedProfile = await response.json();
-      console.log('Profile created successfully:', newProfile);
       
       // Add to tree with proper data structure
       const treeNode = {
         node: newProfile.node,
         relation: newProfile.node.relation,
-        x_position: Math.random() * 400 - 200,
-        y_position: Math.random() * 400 - 200
+        x_position: randomX,
+        y_position: randomY
       };
       
-      console.log('Emitting treeNode:', treeNode);
       emit('add-person', treeNode);
       emit('close');
+      
+      // Show success message
+      showSuccessMessage('Family member created and added to tree successfully!');
     } else {
       const errorData = await response.json();
-      console.error('Error response:', errorData);
       throw new Error(errorData.error || 'Failed to create profile');
     }
   } catch (error) {
-    console.error('Failed to create profile:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to create profile. Please try again.';
-    alert(errorMessage);
+    showErrorMessage(errorMessage);
   } finally {
     isSubmitting.value = false;
   }
+};
+
+// Success message handler
+const showSuccessMessage = (message: string): void => {
+  const notification = document.createElement('div');
+  notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      document.body.removeChild(notification);
+    }
+  }, 3000);
+};
+
+// Error message handler
+const showErrorMessage = (message: string): void => {
+  const notification = document.createElement('div');
+  notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      document.body.removeChild(notification);
+    }
+  }, 5000);
 };
 </script>

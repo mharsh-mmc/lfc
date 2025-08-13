@@ -40,6 +40,14 @@ class FamilyTreeController extends Controller
             ->with('profile:id,name,username,profile_photo_path,date_of_birth,location,bio,profession,passion')
             ->get();
 
+        // If no nodes exist, create the central node for the user
+        if ($nodes->isEmpty()) {
+            $this->createCentralNode($userId, $user);
+            $nodes = FamilyTreeNode::where('user_id', $userId)
+                ->with('profile:id,name,username,profile_photo_path,date_of_birth,location,bio,profession,passion')
+                ->get();
+        }
+
         $edges = FamilyTreeEdge::where('user_id', $userId)->get();
 
         // Convert edges to Vue Flow format
@@ -61,6 +69,27 @@ class FamilyTreeController extends Controller
             'nodes' => $nodes,
             'edges' => $vueFlowEdges,
         ]);
+    }
+
+    /**
+     * Create the central node for a user (their own profile)
+     */
+    private function createCentralNode($userId, $user): void
+    {
+        // Check if central node already exists
+        $existingCentralNode = FamilyTreeNode::where('user_id', $userId)
+            ->where('profile_id', $userId)
+            ->first();
+
+        if (!$existingCentralNode) {
+            FamilyTreeNode::create([
+                'user_id' => $userId,
+                'profile_id' => $userId,
+                'relation' => 'self',
+                'x_position' => 400, // Center position
+                'y_position' => 300, // Center position
+            ]);
+        }
     }
 
     /**
@@ -291,6 +320,7 @@ class FamilyTreeController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
+            'type' => 'required|string|in:custom,vertical,horizontal,circular',
             'layout_data' => 'required|array',
         ]);
 
@@ -298,17 +328,94 @@ class FamilyTreeController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Update existing layout or create new one
-        $layout = FamilyTreeLayout::updateOrCreate(
-            ['user_id' => $userId, 'name' => $request->name],
-            [
-                'type' => 'custom',
-                'layout_data' => $request->layout_data,
-                'is_default' => false,
-            ]
-        );
+        try {
+            $layout = FamilyTreeLayout::updateOrCreate(
+                ['user_id' => $userId, 'name' => $request->name],
+                [
+                    'type' => $request->type,
+                    'layout_data' => $request->layout_data,
+                    'is_default' => false,
+                ]
+            );
 
-        return response()->json($layout, 201);
+            return response()->json([
+                'message' => 'Layout saved successfully',
+                'layout' => $layout
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Failed to save layout: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to save layout: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get custom layout
+     */
+    public function getCustomLayout($userId): JsonResponse
+    {
+        if (Auth::id() !== (int)$userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $layout = FamilyTreeLayout::where('user_id', $userId)
+                ->where('type', 'custom')
+                ->orderBy('updated_at', 'desc')
+                ->first();
+
+            if (!$layout) {
+                return response()->json(['error' => 'No custom layout found'], 404);
+            }
+
+            return response()->json($layout);
+        } catch (\Exception $e) {
+            \Log::error('Failed to get custom layout: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to get custom layout: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get all layouts for user
+     */
+    public function getLayouts($userId): JsonResponse
+    {
+        if (Auth::id() !== (int)$userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $layouts = FamilyTreeLayout::where('user_id', $userId)
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            return response()->json(['layouts' => $layouts]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to get layouts: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to get layouts: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete layout
+     */
+    public function deleteLayout($userId, $layoutId): JsonResponse
+    {
+        if (Auth::id() !== (int)$userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $layout = FamilyTreeLayout::where('user_id', $userId)
+                ->where('id', $layoutId)
+                ->firstOrFail();
+
+            $layout->delete();
+
+            return response()->json(['message' => 'Layout deleted successfully']);
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete layout: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to delete layout: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -449,12 +556,8 @@ class FamilyTreeController extends Controller
     public function createProfileAndAdd(Request $request): JsonResponse
     {
         $userId = Auth::id();
-        \Log::info('createProfileAndAdd called with userId: ' . $userId);
-        \Log::info('Request data:', $request->all());
-        \Log::info('Authenticated user ID: ' . $userId);
         
         if (!$userId) {
-            \Log::warning('No authenticated user found');
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -486,25 +589,14 @@ class FamilyTreeController extends Controller
                 $file = $request->file('profile_photo');
                 $filename = time() . '_' . $file->getClientOriginalName();
                 $profilePhotoPath = $file->storeAs('profile-photos', $filename, 'public');
-                \Log::info('Profile photo uploaded to: ' . $profilePhotoPath);
             }
 
-            // Log the data being sent
-            \Log::info('Creating user with data:', [
-                'name' => $request->name,
-                'username' => $request->username,
-                'email' => 'temp_' . time() . '_' . Str::random(8) . '@familytree.local', // More unique temporary email
-                'relation' => $request->relation,
-                'x_position' => $request->x_position,
-                'y_position' => $request->y_position,
-            ]);
-
-            // Validate that all required fields are present
+            // Create user data
             $userData = [
                 'name' => $request->name,
                 'username' => $request->username,
-                'email' => 'temp_' . time() . '_' . Str::random(8) . '@familytree.local', // More unique temporary email
-                'password' => bcrypt(Str::random(16)), // Temporary password
+                'email' => 'temp_' . time() . '_' . Str::random(8) . '@familytree.local',
+                'password' => bcrypt(Str::random(16)),
                 'is_public' => false,
                 'date_of_birth' => $request->date_of_birth ?: null,
                 'location' => $request->location ?: null,
@@ -516,39 +608,17 @@ class FamilyTreeController extends Controller
                 'profile_photo_path' => $profilePhotoPath,
             ];
 
-            \Log::info('User data prepared:', $userData);
-
             // Create new user profile
-            try {
-                $newUser = User::create($userData);
-                \Log::info('User created successfully with ID: ' . $newUser->id);
-            } catch (\Exception $e) {
-                \Log::error('Failed to create user: ' . $e->getMessage());
-                throw new \Exception('Failed to create user profile: ' . $e->getMessage());
-            }
+            $newUser = User::create($userData);
 
             // Add to family tree
-            \Log::info('Creating family tree node with data:', [
+            $node = FamilyTreeNode::create([
                 'user_id' => $userId,
                 'profile_id' => $newUser->id,
                 'relation' => $request->relation,
                 'x_position' => $request->x_position,
                 'y_position' => $request->y_position,
             ]);
-
-            try {
-                $node = FamilyTreeNode::create([
-                    'user_id' => $userId,
-                    'profile_id' => $newUser->id,
-                    'relation' => $request->relation,
-                    'x_position' => $request->x_position,
-                    'y_position' => $request->y_position,
-                ]);
-                \Log::info('Family tree node created successfully with ID: ' . $node->id);
-            } catch (\Exception $e) {
-                \Log::error('Failed to create family tree node: ' . $e->getMessage());
-                throw new \Exception('Failed to create family tree node: ' . $e->getMessage());
-            }
 
             DB::commit();
 
@@ -559,10 +629,7 @@ class FamilyTreeController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Failed to create profile: ' . $e->getMessage(), [
-                'exception' => $e,
-                'request_data' => $request->all()
-            ]);
+            \Log::error('Failed to create profile: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to create profile: ' . $e->getMessage()], 500);
         }
     }
