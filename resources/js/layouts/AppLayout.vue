@@ -1,12 +1,13 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import ApplicationMark from '@/Components/ApplicationMark.vue';
-import Banner from '@/Components/Banner.vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+import ApplicationMark from '@/components/ApplicationMark.vue';
+import Banner from '@/components/Banner.vue';
+import Dropdown from '@/components/Dropdown.vue';
+import DropdownLink from '@/components/DropdownLink.vue';
+import NavLink from '@/components/NavLink.vue';
+import ResponsiveNavLink from '@/components/ResponsiveNavLink.vue';
+import NotificationDropdown from '@/components/NotificationDropdown.vue';
 
 defineProps({
     title: String,
@@ -41,15 +42,15 @@ const logout = () => {
                         <div class="flex">
                             <!-- Logo -->
                             <div class="shrink-0 flex items-center">
-                                <Link :href="route('dashboard')">
+                                <Link :href="route('profile.show')">
                                     <ApplicationMark class="block h-9 w-auto" />
                                 </Link>
                             </div>
 
                             <!-- Navigation Links -->
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                                    Dashboard
+                                <NavLink :href="route('profile.show')" :active="route().current('profile.show')">
+                                    Profile
                                 </NavLink>
                             </div>
                         </div>
@@ -111,6 +112,11 @@ const logout = () => {
                                         </div>
                                     </template>
                                 </Dropdown>
+                            </div>
+
+                            <!-- Notification Dropdown -->
+                            <div class="ms-3 relative">
+                                <NotificationDropdown />
                             </div>
 
                             <!-- Settings Dropdown -->
@@ -191,8 +197,8 @@ const logout = () => {
                 <!-- Responsive Navigation Menu -->
                 <div :class="{'block': showingNavigationDropdown, 'hidden': ! showingNavigationDropdown}" class="sm:hidden">
                     <div class="pt-2 pb-3 space-y-1">
-                        <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                            Dashboard
+                        <ResponsiveNavLink :href="route('profile.show')" :active="route().current('profile.show')">
+                            Profile
                         </ResponsiveNavLink>
                     </div>
 

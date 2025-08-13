@@ -1,30 +1,15 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import Header from '@/components/Header.vue';
 import Footer from '@/components/Footer.vue';
 </script>
 
 <template>
     <Head title="Leave A Mark" />
     <div class="font-lato">
-        <!-- Top Banner -->
-        <div class="bg-white text-black text-center py-2">
-            <span class="text-sm font-semibold">SOME STORIES DESERVE TO BE REMEMBERED FOREVER.</span>
-        </div>
-
-        <!-- Navigation -->
-        <nav class="bg-[#1E3A8A] text-white px-8 md:px-20 py-4 flex items-center justify-between">
-            <div class="flex items-center">
-                <span class="text-2xl font-bold font-playfair tracking-tight">liveforever</span>
-            </div>
-            <div class="hidden md:flex gap-8 text-white font-semibold">
-                <Link href="/" class="hover:underline font-playfair">Home</Link>
-                <Link href="/leave-a-mark" class="hover:underline font-playfair">Leave a mark</Link>
-                <Link href="/members" class="hover:underline font-playfair">Member</Link>
-            </div>
-            <div class="hidden md:flex">
-                <Link :href="route('register')" class="px-6 py-2 rounded-full bg-white text-[#1E3A8A] font-bold font-playfair shadow hover:bg-[#F5EDE2] transition">Sign up</Link>
-            </div>
-        </nav>
+       
+        <!-- Header -->
+        <Header variant="dark" />
 
         <!-- Redesigned Hero/Intro Section -->
         <section class="w-full bg-white px-8 md:px-20 py-12">

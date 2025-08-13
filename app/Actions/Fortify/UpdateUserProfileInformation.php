@@ -21,10 +21,25 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
+            'banner' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:2048'],
         ])->validateWithBag('updateProfileInformation');
 
         if (isset($input['photo'])) {
             $user->updateProfilePhoto($input['photo']);
+        }
+
+        if (isset($input['banner'])) {
+            // Delete old banner if exists
+            if ($user->banner_path) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->banner_path);
+            }
+            
+            // Store new banner
+            $bannerPath = $input['banner']->store('users/' . $user->id . '/banners', 'public');
+            $user->forceFill([
+                'banner_path' => $bannerPath,
+                'banner_url' => asset('storage/' . $bannerPath),
+            ])->save();
         }
 
         if ($input['email'] !== $user->email &&

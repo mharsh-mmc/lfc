@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\UsernameService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,13 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    protected $usernameService;
+
+    public function __construct(UsernameService $usernameService)
+    {
+        $this->usernameService = $usernameService;
+    }
+
     /**
      * Show the registration page.
      */
@@ -36,9 +44,13 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
+        // Generate a unique username from the user's name
+        $username = $this->usernameService->generateFromName($request->name);
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'username' => $username,
             'password' => Hash::make($request->password),
         ]);
 
@@ -46,6 +58,8 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return to_route('dashboard');
+        // Redirect to the user's profile with their identifier
+        $identifier = $user->username ?: $user->id;
+        return to_route('profile.show', ['identifier' => $identifier]);
     }
 }

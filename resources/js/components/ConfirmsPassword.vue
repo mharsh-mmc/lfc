@@ -5,6 +5,7 @@ import InputError from './InputError.vue';
 import PrimaryButton from './PrimaryButton.vue';
 import SecondaryButton from './SecondaryButton.vue';
 import TextInput from './TextInput.vue';
+import { useForm } from '@inertiajs/vue3';
 
 const emit = defineEmits(['confirmed']);
 
@@ -34,13 +35,20 @@ const form = reactive({
 const passwordInput = ref(null);
 
 const startConfirmingPassword = () => {
-    axios.get(route('password.confirmation')).then(response => {
-        if (response.data.confirmed) {
-            emit('confirmed');
-        } else {
-            confirmingPassword.value = true;
-
-            setTimeout(() => passwordInput.value.focus(), 250);
+    router.visit(route('password.confirmation'), {
+        preserveState: true,
+        preserveScroll: true,
+        only: ['confirmed'],
+        onSuccess: (page) => {
+            if (page.props.confirmed) {
+                emit('confirmed');
+            } else {
+                confirmingPassword.value = true;
+                setTimeout(() => passwordInput.value.focus(), 250);
+            }
+        },
+        onError: (errors) => {
+            console.error('Failed to check password confirmation:', errors);
         }
     });
 };
@@ -48,18 +56,23 @@ const startConfirmingPassword = () => {
 const confirmPassword = () => {
     form.processing = true;
 
-    axios.post(route('password.confirm'), {
+    const passwordForm = useForm({
         password: form.password,
-    }).then(() => {
-        form.processing = false;
+    });
 
-        closeModal();
-        nextTick().then(() => emit('confirmed'));
-
-    }).catch(error => {
-        form.processing = false;
-        form.error = error.response.data.errors.password[0];
-        passwordInput.value.focus();
+    passwordForm.post(route('password.confirm'), {
+        onSuccess: () => {
+            form.processing = false;
+            closeModal();
+            nextTick().then(() => emit('confirmed'));
+        },
+        onError: (errors) => {
+            form.processing = false;
+            if (errors.password) {
+                form.error = errors.password[0];
+            }
+            passwordInput.value.focus();
+        }
     });
 };
 

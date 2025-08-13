@@ -1,0 +1,3 @@
+@echo off
+echo Starting Laravel server with increased memory limit...
+php -d memory_limit=1024M artisan serve --host=127.0.0.1 --port=8000

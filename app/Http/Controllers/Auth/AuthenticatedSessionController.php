@@ -33,7 +33,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Get the authenticated user and redirect to their profile
+        $user = Auth::user();
+        $identifier = $user->username ?: $user->id;
+        
+        return redirect()->intended(route('profile.show', ['identifier' => $identifier]));
     }
 
     /**

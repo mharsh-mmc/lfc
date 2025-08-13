@@ -39,12 +39,12 @@ return [
     |--------------------------------------------------------------------------
     |
     | Here you may specify the authentication guard Jetstream will use while
-    | authenticating users. This value should correspond with one of your
+    | authenticating users. This value should correspond to one of your
     | guards that is already present in your "auth" configuration file.
     |
     */
 
-    'guard' => 'sanctum',
+    'guard' => 'web',
 
     /*
     |--------------------------------------------------------------------------
@@ -59,7 +59,7 @@ return [
 
     'features' => [
         // Features::termsAndPrivacyPolicy(),
-        // Features::profilePhotos(),
+        Features::profilePhotos(),
         // Features::api(),
         // Features::teams(['invitations' => true]),
         Features::accountDeletion(),
