@@ -275,6 +275,20 @@
         :profile="selectedProfile"
         @close="showProfilePopup = false"
       />
+
+      <!-- Error Popup -->
+      <ErrorPopup
+        v-if="showErrorPopup"
+        :message="errorMessage"
+        @close="showErrorPopup = false"
+      />
+
+      <!-- Success Popup -->
+      <SuccessPopup
+        v-if="showSuccessPopup"
+        :message="successMessage"
+        @close="showSuccessPopup = false"
+      />
     </div>
   </div>
 </template>
@@ -290,6 +304,8 @@ import '@vue-flow/core/dist/theme-default.css';
 import FamilyTreeNode from './FamilyTreeNode.vue';
 import AddMemberModal from './AddMemberModal.vue';
 import ProfilePopupModal from './ProfilePopupModal.vue';
+import ErrorPopup from '../../ErrorPopup.vue';
+import SuccessPopup from '../../SuccessPopup.vue';
 import { initializeApiVerification } from '../../../utils/apiVerification';
 
 // Types
@@ -373,6 +389,12 @@ const isGeneratingLayout = ref(false);
 const isSaving = ref(false);
 const isLoading = ref(true);
 const hasLoadedTree = ref(false);
+
+// Popup state
+const showErrorPopup = ref(false);
+const showSuccessPopup = ref(false);
+const errorMessage = ref('');
+const successMessage = ref('');
 
 // Advanced features state
 const currentLayout = ref<'custom' | 'vertical' | 'horizontal' | 'circular' | 'hierarchical'>('custom');
@@ -474,8 +496,6 @@ const toggleHelperLines = (): void => {
 };
 
 const addPersonToTree = async (person: any): Promise<void> => {
-  console.log('Adding person to tree:', person);
-  
   try {
     // Handle both person objects and treeNode objects from the modal
     const personData = person.node ? person.node : person;
@@ -487,7 +507,7 @@ const addPersonToTree = async (person: any): Promise<void> => {
     ) as TreeNode;
 
     if (!centerNode) {
-      alert('Center node not found. Please refresh the page.');
+      showErrorMessage('Center node not found. Please refresh the page.');
       return;
     }
 
@@ -559,7 +579,6 @@ const addPersonToTree = async (person: any): Promise<void> => {
 
         if (response.ok) {
           const savedNode = await response.json();
-          console.log('Node added successfully:', savedNode);
           
           // Update node with backend data
           const updatedElements = elements.value.map(el => {
@@ -579,16 +598,14 @@ const addPersonToTree = async (person: any): Promise<void> => {
           throw new Error('Failed to save node to backend');
         }
       } catch (error) {
-        console.error('Failed to save node:', error);
-        alert('Profile added to tree but failed to save. Please try saving the tree manually.');
+        showErrorMessage('Profile added to tree but failed to save. Please try saving the tree manually.');
       }
     }
     
     emit('tree-updated');
-    console.log('Person added to tree successfully:', newNode);
+    showSuccessMessage('Person added to tree successfully!');
   } catch (error) {
-    console.error('Error adding person to tree:', error);
-    alert('Failed to add person to tree. Please try again.');
+    showErrorMessage('Failed to add person to tree. Please try again.');
   }
 };
 
@@ -617,11 +634,11 @@ const handleSearch = async (): Promise<void> => {
         !existingProfileIds.includes(profile.id)
       );
     } else {
-      console.error('Search failed:', response.status);
+      showErrorMessage('Search failed. Please try again.');
       searchResults.value = [];
     }
   } catch (error) {
-    console.error('Search error:', error);
+    showErrorMessage('Search error. Please try again.');
     searchResults.value = [];
   }
 };
@@ -634,7 +651,7 @@ const addSearchResultToTree = async (profile: any): Promise<void> => {
     ) as TreeNode;
 
     if (!centerNode) {
-      alert('Center node not found. Please refresh the page.');
+      showErrorMessage('Center node not found. Please refresh the page.');
       return;
     }
 
@@ -707,7 +724,6 @@ const addSearchResultToTree = async (profile: any): Promise<void> => {
 
       if (response.ok) {
         const savedNode = await response.json();
-        console.log('Node added successfully:', savedNode);
         
         // Update node with backend data
         const updatedElements = elements.value.map(el => {
@@ -725,16 +741,15 @@ const addSearchResultToTree = async (profile: any): Promise<void> => {
         elements.value = updatedElements;
         
         emit('tree-updated');
+        showSuccessMessage('Profile added to tree successfully!');
       } else {
         throw new Error('Failed to save node to backend');
       }
     } catch (error) {
-      console.error('Failed to save node:', error);
-      alert('Profile added to tree but failed to save. Please try saving the tree manually.');
+      showErrorMessage('Profile added to tree but failed to save. Please try saving the tree manually.');
     }
   } catch (error) {
-    console.error('Error adding search result to tree:', error);
-    alert('Failed to add profile to tree. Please try again.');
+    showErrorMessage('Failed to add profile to tree. Please try again.');
   }
 };
 
@@ -761,8 +776,7 @@ const takeScreenshot = async (): Promise<void> => {
       link.click();
     }
   } catch (error) {
-    console.error('Screenshot error:', error);
-    alert('Failed to take screenshot. Please try again.');
+    showErrorMessage('Failed to take screenshot. Please try again.');
   } finally {
     isTakingScreenshot.value = false;
   }
@@ -780,9 +794,9 @@ const deleteSelectedElements = (): void => {
       elements.value = elements.value.filter(el => !selectedIds.includes(el.id));
       selectedElements.value = [];
       emit('tree-updated');
+      showSuccessMessage('Selected elements deleted successfully!');
     } catch (error) {
-      console.error('Error deleting selected elements:', error);
-      alert('Failed to delete elements. Please try again.');
+      showErrorMessage('Failed to delete elements. Please try again.');
     }
   }
 };
@@ -803,9 +817,9 @@ const alignSelectedElements = (): void => {
       }
       return el;
     });
+    showSuccessMessage('Selected elements aligned successfully!');
   } catch (error) {
-    console.error('Error aligning elements:', error);
-    alert('Failed to align elements. Please try again.');
+    showErrorMessage('Failed to align elements. Please try again.');
   }
 };
 
@@ -834,8 +848,7 @@ const applyLayout = (): void => {
         break;
     }
   } catch (error) {
-    console.error('Error applying layout:', error);
-    alert('Failed to apply layout. Please try again.');
+    showErrorMessage('Failed to apply layout. Please try again.');
   }
 };
 
@@ -1022,6 +1035,7 @@ const handleConnect = async (params: any): Promise<void> => {
         elements.value = updatedElements;
         
         emit('tree-updated');
+        showSuccessMessage('Connection created successfully!');
       } else {
         // Remove the edge if backend save failed
         elements.value = elements.value.filter(el => el.id !== newEdge.id);
@@ -1062,18 +1076,16 @@ const handleNodeDragStop = async (event: any, node: TreeNode): Promise<void> => 
         })
       });
 
-      if (response.ok) {
-        console.log('Node position saved successfully');
-      } else {
-        console.error('Failed to save node position');
+      if (!response.ok) {
+        showErrorMessage('Failed to save node position. Please try saving the tree manually.');
       }
     } catch (error) {
-      console.error('Error saving node position:', error);
+      showErrorMessage('Failed to save node position. Please try saving the tree manually.');
     }
 
     emit('tree-updated');
   } catch (error) {
-    console.error('Error handling node drag stop:', error);
+    showErrorMessage('Failed to update node position. Please try again.');
   }
 };
 
@@ -1082,19 +1094,20 @@ const handleNodeClick = (event: any, node: TreeNode): void => {
     selectedProfile.value = node.data;
     showProfilePopup.value = true;
   } catch (error) {
-    console.error('Error handling node click:', error);
+    showErrorMessage('Failed to open profile. Please try again.');
   }
 };
 
 const handleNodeDoubleClick = (event: any, node: TreeNode): void => {
-  // Enter edit mode for node
-  console.log('Edit node:', node);
+  // Enter edit mode for node - future enhancement
+  showSuccessMessage('Double-click functionality coming soon!');
 };
 
 const handleEdgeClick = (event: any, edge: TreeEdge): void => {
   try {
     const newRelation = prompt('Enter relationship type:', edge.data.relationship_type || 'family');
     if (newRelation) {
+      // Update local edge immediately
       const updatedElements = elements.value.map(el => {
         if (el.id === edge.id) {
           return { ...el, data: { ...el.data, relationship_type: newRelation } };
@@ -1102,11 +1115,33 @@ const handleEdgeClick = (event: any, edge: TreeEdge): void => {
         return el;
       });
       elements.value = updatedElements;
-      emit('tree-updated');
+
+      // Save to backend
+      try {
+        const response = await fetch(`/api/profiles/${props.profileUserData.id}/familytree/edge/${edge.data.edge_id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          },
+          body: JSON.stringify({
+            relationship_type: newRelation
+          })
+        });
+
+        if (response.ok) {
+          elements.value = updatedElements;
+          emit('tree-updated');
+          showSuccessMessage('Relationship updated successfully!');
+        } else {
+          throw new Error('Failed to update edge');
+        }
+      } catch (error) {
+        showErrorMessage('Edge updated locally but failed to save. Please try saving the tree manually.');
+      }
     }
   } catch (error) {
-    console.error('Error handling edge click:', error);
-    alert('Failed to update relationship. Please try again.');
+    showErrorMessage('Failed to update relationship. Please try again.');
   }
 };
 
@@ -1137,20 +1172,19 @@ const handleEdgeDoubleClick = async (event: any, edge: TreeEdge): Promise<void> 
         });
 
         if (response.ok) {
-          console.log('Edge updated successfully');
+          emit('tree-updated');
+          showSuccessMessage('Relationship updated successfully!');
         } else {
           throw new Error('Failed to update edge');
         }
       } catch (error) {
-        console.error('Failed to update edge:', error);
-        alert('Edge updated locally but failed to save. Please try saving the tree manually.');
+        showErrorMessage('Edge updated locally but failed to save. Please try saving the tree manually.');
       }
 
       emit('tree-updated');
     }
   } catch (error) {
-    console.error('Error handling edge double click:', error);
-    alert('Failed to update relationship. Please try again.');
+    showErrorMessage('Failed to update relationship. Please try again.');
   }
 };
 
@@ -1171,21 +1205,20 @@ const deleteEdge = async (edge: TreeEdge): Promise<void> => {
           });
 
           if (response.ok) {
-            console.log('Edge deleted successfully');
+            emit('tree-updated');
+            showSuccessMessage('Connection deleted successfully!');
           } else {
             throw new Error('Failed to delete edge');
           }
         } catch (error) {
-          console.error('Failed to delete edge:', error);
-          alert('Edge removed locally but failed to delete from server. Please try saving the tree manually.');
+          showErrorMessage('Edge removed locally but failed to delete from server. Please try saving the tree manually.');
         }
       }
 
       emit('tree-updated');
     }
   } catch (error) {
-    console.error('Error deleting edge:', error);
-    alert('Failed to delete connection. Please try again.');
+    showErrorMessage('Failed to delete connection. Please try again.');
   }
 };
 
@@ -1263,10 +1296,10 @@ const generateLayout = (): void => {
         
         elements.value = updatedElements;
         emit('tree-updated');
+        showSuccessMessage('Layout generated successfully!');
       }
     } catch (error) {
-      console.error('Error generating layout:', error);
-      alert('Failed to generate layout. Please try again.');
+      showErrorMessage('Failed to generate layout. Please try again.');
     } finally {
       isGeneratingLayout.value = false;
     }
@@ -1403,32 +1436,14 @@ const applyLayoutToNodes = (layoutNodes: Array<{id: string, x: number, y: number
 
 // Success message handler
 const showSuccessMessage = (message: string): void => {
-  // Create a temporary success notification
-  const notification = document.createElement('div');
-  notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
-  notification.textContent = message;
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      document.body.removeChild(notification);
-    }
-  }, 3000);
+  successMessage.value = message;
+  showSuccessPopup.value = true;
 };
 
 // Error message handler
 const showErrorMessage = (message: string): void => {
-  // Create a temporary error notification
-  const notification = document.createElement('div');
-  notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-md shadow-lg z-50';
-  notification.textContent = message;
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      document.body.removeChild(notification);
-    }
-  }, 5000);
+  errorMessage.value = message;
+  showErrorPopup.value = true;
 };
 
 // Keyboard shortcuts
@@ -1448,7 +1463,7 @@ const handleKeyDown = (event: KeyboardEvent): void => {
       saveTree();
     }
   } catch (error) {
-    console.error('Error handling keyboard shortcut:', error);
+    showErrorMessage('Failed to handle keyboard shortcut. Please try again.');
   }
 };
 
