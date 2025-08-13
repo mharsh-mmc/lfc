@@ -16,18 +16,14 @@
 
       <!-- Video Container -->
       <div class="relative">
-        <video
-          ref="videoElement"
+        <vue-plyr
           :src="video?.url"
+          :options="plyrOptions"
           class="w-full h-auto max-h-[70vh]"
-          controls
-          preload="metadata"
-          @loadedmetadata="onVideoLoaded"
+          @ready="onPlayerReady"
           @timeupdate="onTimeUpdate"
           @ended="onVideoEnded"
-        >
-          Your browser does not support the video tag.
-        </video>
+        />
       </div>
 
       <!-- Video Info -->
@@ -54,7 +50,26 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const videoElement = ref(null)
+const player = ref(null)
+
+const plyrOptions = {
+  controls: [
+    'play-large',
+    'play',
+    'rewind',
+    'fast-forward',
+    'progress',
+    'current-time',
+    'duration',
+    'mute',
+    'volume',
+    'fullscreen'
+  ],
+  seekTime: 10,
+  keyboard: { focused: true, global: true },
+  autoplay: false,
+  hideControls: true
+}
 
 const formatDuration = (seconds) => {
   if (!seconds) return '0:00'
@@ -72,11 +87,9 @@ const formatDate = (date) => {
   })
 }
 
-const onVideoLoaded = () => {
-  if (videoElement.value) {
-    // Video metadata loaded
-    console.log('Video loaded:', videoElement.value.duration)
-  }
+const onPlayerReady = (plyrInstance) => {
+  player.value = plyrInstance
+  console.log('Plyr player ready:', plyrInstance)
 }
 
 const onTimeUpdate = () => {
@@ -100,5 +113,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape)
+  if (player.value) {
+    player.value.destroy()
+  }
 })
 </script> 

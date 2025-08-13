@@ -1103,7 +1103,7 @@ const handleNodeDoubleClick = (event: any, node: TreeNode): void => {
   showSuccessMessage('Double-click functionality coming soon!');
 };
 
-const handleEdgeClick = (event: any, edge: TreeEdge): void => {
+const handleEdgeClick = async (event: any, edge: TreeEdge): Promise<void> => {
   try {
     const newRelation = prompt('Enter relationship type:', edge.data.relationship_type || 'family');
     if (newRelation) {

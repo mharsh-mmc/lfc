@@ -50,7 +50,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import FamilyTree from './family-tree/FamilyTree.vue';
-import ErrorBoundary from '../../ErrorBoundary.vue';
+import ErrorBoundary from '@/components/ErrorBoundary.vue';
 
 interface ProfileUserData {
   id: number;
